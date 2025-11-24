@@ -8,6 +8,7 @@ CMSC 124: LOLCODE Syntax Analyzer
 from lexer_analyzer import tokenize, readFile
 from semantics_analyzer import SemanticsEvaluator
 
+# syntax analyzer for LOLCODE
 class SyntaxAnalyzer:
     def __init__(self, tokens, log_function=None, input_function=None):
         # organize tokens by line number
@@ -1106,7 +1107,7 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Function must start with 'HOW IZ I'")
             return
 
-        self.advance_to_next_token()
+        self.advance_to_next_token() # move past 'HOW IZ I'
 
         if not self.current_token or self.current_token.type != 'Variable Identifier':
             self.log_syntax_error("Expected function name after 'HOW IZ I'")
@@ -1115,6 +1116,7 @@ class SyntaxAnalyzer:
         function_name = self.current_token.value
         self.advance_to_next_token()
 
+        # parse parameters
         parameters = []
         while self.current_token:
             if self.current_token.value == 'YR':
@@ -1124,10 +1126,11 @@ class SyntaxAnalyzer:
                     self.log_syntax_error("Expected parameter name after 'YR'")
                     return
 
-                parameter_name = self.current_token.value
-                parameters.append(parameter_name)
-                self.advance_to_next_token()
+                parameter_name = self.current_token.value 
+                parameters.append(parameter_name) # store parameter name
+                self.advance_to_next_token() # move past parameter
 
+                # check for AN between multiple parameters
                 if self.current_token and self.current_token.value == 'AN':
                     self.advance_to_next_token()
                 elif self.current_token and self.current_token.value == 'YR':
@@ -1136,14 +1139,15 @@ class SyntaxAnalyzer:
             else:
                 break
 
-        self.advance_to_next_line()
+        self.advance_to_next_line() 
 
-        while True:
+        while True: # function body
             if not self.current_token:
                 if not self.advance_to_next_line():
                     break
                 continue
 
+            # check for function end
             if self.current_token.value == 'IF U SAY SO':
                 break
 
@@ -1192,8 +1196,8 @@ class SyntaxAnalyzer:
 
         function_name = self.current_token.value
         self.advance_to_next_token()
-
-        while self.current_token:
+        
+        while self.current_token: # parse arguments
             if self.current_token.value == 'YR':
                 self.advance_to_next_token()
 
@@ -1222,7 +1226,7 @@ class SyntaxAnalyzer:
         print(f"\nParsing line {self.current_line_number}: {[t.value for t in self.current_tokens]}")
 
         while self.current_token:
-            # Check for invalid tokens first
+            # check for invalid tokens first
             if self.current_token.type == 'INVALID TOKEN':
                 self.log_syntax_error(f"Invalid token '{self.current_token.value}'")
                 return
@@ -1234,11 +1238,11 @@ class SyntaxAnalyzer:
                 self.in_wazzup_block = False
                 self.advance_to_next_token()
             elif self.current_token.value == 'I HAS A':
-                # Allow variable declarations both inside and outside WAZZUP block
+                # allow variable declarations both inside and outside WAZZUP block
                 self.parse_variable_declaration()
             elif self.current_token.type == 'Output Keyword':
                 self.parse_print()
-                # After printing, we're done with this line
+                # after printing, we're done with this line
                 return
             elif self.current_token.type == 'Input Keyword':
                 self.parse_input()
@@ -1266,10 +1270,10 @@ class SyntaxAnalyzer:
                     return
                 self.advance_to_next_token()
             elif self.current_token.type in ['Arithmetic Operation', 'Boolean Operation', 'Comparison Operation', 'String Concatenation']:
-                # Standalone expression - evaluates and stores result in IT
+                # evaluates and stores result in IT
                 result = self.evaluate_expression()
                 
-                # Determine type
+                # determine type
                 if isinstance(result, float):
                     result_type = 'NUMBAR'
                 elif isinstance(result, int):
@@ -1290,8 +1294,7 @@ class SyntaxAnalyzer:
                 elif next_token and next_token.type == 'Typecasting Operation':
                     self.parse_typecasting()
                 elif not next_token:
-                    # Standalone variable expression - only valid if next line is WTF? (switch case)
-                    # Check if the next line starts with WTF?
+                    # check if the next line starts with WTF?
                     line_numbers = sorted(self.lines.keys())
                     current_index = line_numbers.index(self.current_line_number)
                     next_line_number = line_numbers[current_index + 1] if current_index + 1 < len(line_numbers) else None
@@ -1299,7 +1302,7 @@ class SyntaxAnalyzer:
                     if next_line_number:
                         next_line_tokens = self.lines[next_line_number]
                         if next_line_tokens and next_line_tokens[0].value == 'WTF?':
-                            # Valid: standalone expression before switch
+                            # standalone expression before switch
                             if self.current_token.value not in self.variables:
                                 self.log_syntax_error(f"Undefined variable '{self.current_token.value}'")
                                 return
@@ -1307,15 +1310,15 @@ class SyntaxAnalyzer:
                             self.advance_to_next_token()
                             return
                     
-                    # Invalid: standalone identifier not before WTF?
+                    # invalid: standalone identifier not before WTF?
                     self.log_syntax_error("Unknown statement", found=self.current_token.value)
                     return
                 else:
-                    # Unknown statement starting with Variable Identifier
+                    # unknown statement starting with Variable Identifier
                     self.log_syntax_error("Unknown statement", found=self.current_token.value)
                     return
             else:
-                # General fallback for unrecognized tokens
+                # general fallback for unrecognized tokens
                 self.log_syntax_error("Unexpected or invalid statement", found=self.current_token.value)
                 return
 
@@ -1392,7 +1395,7 @@ def main():
                     print(f"File: {filename}")
                     print('='*60)
                     
-                    # Tokenize
+                    # tokenize
                     tokens = tokenize(file_content)
                     
                     # Analyze syntax
@@ -1416,7 +1419,6 @@ def main():
             break
         else:
             print("Invalid choice. Please try again.")
-
 
 if __name__ == "__main__":
     main()
