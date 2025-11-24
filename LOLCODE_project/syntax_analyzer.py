@@ -9,7 +9,7 @@ from lexer_analyzer import tokenize, readFile
 from semantics_analyzer import SemanticsEvaluator
 
 class SyntaxAnalyzer:
-    def __init__(self, tokens, log_function=None):
+    def __init__(self, tokens, log_function=None, input_function=None):
         # organize tokens by line number
         self.lines = self._organize_tokens_by_line(tokens)
         self.current_line_number = min(self.lines.keys()) if self.lines else None
@@ -22,6 +22,7 @@ class SyntaxAnalyzer:
         self.inside_switch_block = False
 
         self.log_function = log_function
+        self.input_function = input_function
         
         # semantics evaluator
         self.semantics = SemanticsEvaluator(self.variables)
@@ -74,6 +75,25 @@ class SyntaxAnalyzer:
             value = identifier_info.get("value", "undefined")
             var_type = identifier_info.get("type", "unknown")
             print(f"  {identifier}: value={value}, type={var_type}")
+
+    def _get_input(self, prompt):
+        """
+        Get input from user - handles both GUI and command line contexts
+        """
+        if self.input_function:
+            # GUI context - use GUI's input method
+            try:
+                return self.input_function(prompt)
+            except Exception as e:
+                self.emit(f"GUI input failed: {e}. Using default value.\n")
+                return "NOOB"
+        else:
+            # Command line context - use standard input
+            try:
+                return input(prompt)
+            except (EOFError, KeyboardInterrupt):
+                return "NOOB"  # Default value if input fails
+
 
     def advance_to_next_line(self):
         # move to the next line of code
@@ -420,15 +440,20 @@ class SyntaxAnalyzer:
         second_operand = self.evaluate_expression()
         
         # do the actual arithmetic using semantics
-        result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
-        
-        # figure out if result is float or int
-        result_type = 'NUMBAR' if isinstance(result, float) else 'NUMBR'
-        
-        # store result in IT variable
-        self.variables['IT'] = {"value": result, "type": result_type}
-        
-        return result
+        try:
+            result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
+            
+            # figure out if result is float or int
+            result_type = 'NUMBAR' if isinstance(result, float) else 'NUMBR'
+            
+            # store result in IT variable
+            self.variables['IT'] = {"value": result, "type": result_type}
+            
+            return result
+        except ValueError as e:
+            # Handle semantic errors
+            self.log_syntax_error(f"Runtime Error: {str(e)}")
+            return "NOOB"
     
     def evaluate_boolean_operation(self, operation):
         # evaluate boolean operations with actual values
@@ -444,12 +469,17 @@ class SyntaxAnalyzer:
         second_operand = self.evaluate_expression()
         
         # do the boolean operation using semantics
-        result = self.semantics.evaluate_boolean(operation, first_operand, second_operand)
-        
-        # store result in IT variable
-        self.variables['IT'] = {"value": result, "type": "TROOF"}
-        
-        return result
+        try:
+            result = self.semantics.evaluate_boolean(operation, first_operand, second_operand)
+            
+            # store result in IT variable
+            self.variables['IT'] = {"value": result, "type": "TROOF"}
+            
+            return result
+        except ValueError as e:
+            # Handle semantic errors
+            self.log_syntax_error(f"Runtime Error: {str(e)}")
+            return "NOOB"
     
     def evaluate_comparison_operation(self, operation):
         # evaluate comparison operations with actual values
@@ -465,12 +495,17 @@ class SyntaxAnalyzer:
         second_operand = self.evaluate_expression()
         
         # do the comparison using semantics
-        result = self.semantics.evaluate_comparison(operation, first_operand, second_operand)
-        
-        # store result in IT variable
-        self.variables['IT'] = {"value": result, "type": "TROOF"}
-        
-        return result
+        try:
+            result = self.semantics.evaluate_comparison(operation, first_operand, second_operand)
+            
+            # store result in IT variable
+            self.variables['IT'] = {"value": result, "type": "TROOF"}
+            
+            return result
+        except ValueError as e:
+            # Handle semantic errors
+            self.log_syntax_error(f"Runtime Error: {str(e)}")
+            return "NOOB"
     
     def evaluate_infinite_arity_operation(self, operation):
         # evaluate ALL OF or ANY OF operations with actual values
@@ -799,14 +834,47 @@ class SyntaxAnalyzer:
             self.log_syntax_error(f"Undefined variable '{variable_name}' - must be declared in WAZZUP block")
             return
         
-        # GIMMEH doesn't create variables, it just reads input into existing ones
+        # Capture input and store it in the variable
+        try:
+            input_value = self._get_input(f"Enter value for {variable_name}: ")
+            self.semantics.store_input(variable_name, input_value)
+            
+            # Update the syntax analyzer's symbol table as well
+            processed_value = self.semantics._process_input_value(input_value)
+            self.variables[variable_name] = {"value": processed_value, "type": "YARN"}
+            
+        except Exception as e:
+            self.log_syntax_error(f"Error capturing input for '{variable_name}': {str(e)}")
+        
         self.advance_to_next_token()
 
     def parse_conditional(self):
+        """
+        Parse and execute conditional logic (O RLY?) per LOLCODE specification
+        
+        Syntax: <expression> O RLY?
+                  YA RLY
+                    <code block>
+                  [MEBBE <expression>
+                    <code block>]...
+                  [NO WAI
+                    <code block>]
+                  OIC
+        
+        Semantics:
+        - Evaluates IT variable (set by expression before O RLY?)
+        - Executes YA RLY block if IT is WIN (true)
+        - Evaluates MEBBE expressions in order, executes first WIN block
+        - Executes NO WAI block only if no previous block executed
+        - Ensures ONLY ONE branch executes (mutually exclusive)
+        """
         if self.current_token.value != 'O RLY?':
             self.log_syntax_error("Expected 'O RLY?' for conditional block")
             return
 
+        # Evaluate IT variable to determine which branch to execute
+        branch_executed = self.semantics.evaluate_it_condition()
+        
         self.advance_to_next_line()
 
         if not self.current_token or self.current_token.value != 'YA RLY':
@@ -815,35 +883,88 @@ class SyntaxAnalyzer:
 
         self.advance_to_next_line()
 
+        # Execute or skip YA RLY block based on IT variable
+        if branch_executed:
+            self._execute_conditional_block(['MEBBE', 'NO WAI', 'OIC'])
+        else:
+            self._skip_conditional_block(['MEBBE', 'NO WAI', 'OIC'])
+
+        # Handle MEBBE (else-if) blocks - only evaluate if no branch executed yet
+        while self.current_token and self.current_token.value == 'MEBBE':
+            self.advance_to_next_token()
+            
+            # Evaluate MEBBE expression only if no previous branch executed
+            if not branch_executed:
+                mebbe_expression = self.evaluate_expression()
+                mebbe_result = self._to_bool(mebbe_expression)
+            else:
+                # Skip expression evaluation if a branch already executed
+                self.evaluate_expression()  # Still need to consume the expression
+                mebbe_result = False
+            
+            self.advance_to_next_line()
+            
+            # Execute MEBBE block if condition is True and no previous block executed
+            if not branch_executed and mebbe_result:
+                branch_executed = True  # Mark that we executed a block
+                self._execute_conditional_block(['MEBBE', 'NO WAI', 'OIC'])
+            else:
+                self._skip_conditional_block(['MEBBE', 'NO WAI', 'OIC'])
+
+        # Handle NO WAI (else) block - only execute if no branch executed yet
+        if self.current_token and self.current_token.value == 'NO WAI':
+            self.advance_to_next_line()
+
+            if not branch_executed:
+                self._execute_conditional_block(['OIC'])
+            else:
+                self._skip_conditional_block(['OIC'])
+
+        if not self.current_token or self.current_token.value != 'OIC':
+            self.log_syntax_error("Expected 'OIC' to close 'O RLY?' block")
+    
+    def _execute_conditional_block(self, end_keywords):
+        """
+        Execute a conditional block until one of the end keywords is reached
+        
+        Args:
+            end_keywords: List of keywords that mark the end of this block
+        """
         while True:
             if not self.current_token:
                 if not self.advance_to_next_line():
                     break
                 continue
 
-            if self.current_token.value in ['NO WAI', 'OIC']:
+            if self.current_token.value in end_keywords:
                 break
 
             self.parse_line()
             self.advance_to_next_line()
-
-        if self.current_token and self.current_token.value == 'NO WAI':
-            self.advance_to_next_line()
-
-            while True:
-                if not self.current_token:
-                    if not self.advance_to_next_line():
-                        break
-                    continue
-
-                if self.current_token.value == 'OIC':
+    
+    def _skip_conditional_block(self, end_keywords):
+        """
+        Skip a conditional block without executing until one of the end keywords is reached
+        
+        Args:
+            end_keywords: List of keywords that mark the end of this block
+        """
+        while True:
+            if not self.current_token:
+                if not self.advance_to_next_line():
                     break
+                continue
 
-                self.parse_line()
-                self.advance_to_next_line()
+            if self.current_token.value in end_keywords:
+                break
 
-        if not self.current_token or self.current_token.value != 'OIC':
-            self.log_syntax_error("Expected 'OIC' to close 'O RLY?' block")
+            self.advance_to_next_line()
+    
+    def _to_bool(self, value):
+        """
+        Helper method to convert a value to boolean
+        """
+        return self.semantics._to_bool(value)
 
     def parse_loop(self):
         if self.current_token.value != 'IM IN YR':
