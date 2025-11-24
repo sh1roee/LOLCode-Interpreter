@@ -871,8 +871,13 @@ class SyntaxAnalyzer:
                 break
 
         self.advance_to_next_line() 
+        
+        # Store function definition with start line
+        # We are currently at the first line of the body
+        self.semantics.define_function(function_name, parameters, self.current_line_number)
 
-        while True: # function body
+        # Skip function body
+        while True: 
             if not self.current_token:
                 if not self.advance_to_next_line():
                     break
@@ -881,33 +886,8 @@ class SyntaxAnalyzer:
             # check for function end
             if self.current_token.value == 'IF U SAY SO':
                 break
-
-            if self.current_token.value == 'FOUND YR':
-                self.advance_to_next_token()
-
-                if not self.current_token:
-                    self.log_syntax_error("Expected return value after 'FOUND YR'")
-                    return
-
-                if self.current_token.type in ['NUMBR Literal', 'NUMBAR Literal', 'TROOF Literal', 'YARN Literal', 'Variable Identifier']:
-                    self.advance_to_next_token()
-                elif self.current_token.type in ['Arithmetic Operation', 'Boolean Operation', 'Comparison Operation']:
-                    # Parse and evaluate the expression
-                    self.parse_expression()
-                else:
-                    self.log_syntax_error("Invalid return value")
-                    return
-
-                self.advance_to_next_line()
-                continue
-
-            if self.current_token.value == 'GTFO':
-                # GTFO is a void return (no value)
-                self.advance_to_next_token()
-                self.advance_to_next_line()
-                continue
-
-            self.parse_line()
+            
+            # Just skip lines until we find the end
             self.advance_to_next_line()
 
         if not self.current_token or self.current_token.value != 'IF U SAY SO':
@@ -929,6 +909,7 @@ class SyntaxAnalyzer:
         function_name = self.current_token.value
         self.advance_to_next_token()
         
+        arguments = []
         while self.current_token: # parse arguments
             if self.current_token.value == 'YR':
                 self.advance_to_next_token()
@@ -937,16 +918,19 @@ class SyntaxAnalyzer:
                     self.log_syntax_error("Expected argument after 'YR'")
                     return
 
-                if self.current_token.type in ['NUMBR Literal', 'NUMBAR Literal', 'TROOF Literal', 'YARN Literal', 'Variable Identifier']:
-                    self.advance_to_next_token()
-                elif self.current_token.type in ['Arithmetic Operation', 'Boolean Operation', 'Comparison Operation']:
-                    # Parse and evaluate the expression
-                    self.parse_expression()
-                elif self.current_token.value == 'I IZ':
+                if self.current_token.value == 'I IZ':
+                    # Nested function call
                     self.parse_functioncall()
+                    # Result is in IT
+                    try:
+                        val = self.semantics.get_variable('IT')
+                        arguments.append(val)
+                    except ValueError:
+                        arguments.append("NOOB")
                 else:
-                    self.log_syntax_error("Expected literal, variable, or function call after 'YR'")
-                    return
+                    # Parse expression for argument
+                    val = self.parse_expression()
+                    arguments.append(val)
 
                 if self.current_token and self.current_token.value == 'AN':
                     self.advance_to_next_token()
@@ -954,6 +938,50 @@ class SyntaxAnalyzer:
                     break
             else:
                 break
+                
+        # Execute function
+        try:
+            func_info = self.semantics.prepare_function_call(function_name, arguments)
+            
+            # Save current state
+            return_line = self.current_line_number
+            return_tokens = self.current_tokens
+            return_position = self.current_position
+            return_token = self.current_token
+            
+            # Jump to function body
+            self.current_line_number = func_info['body_start']
+            self.current_tokens = self.lines[self.current_line_number]
+            self.current_position = 0
+            self.current_token = self.current_tokens[0] if self.current_tokens else None
+            
+            # Execute body
+            self.returning = False
+            while self.current_line_number is not None:
+                if not self.current_token:
+                    if not self.advance_to_next_line():
+                        break
+                    continue
+                    
+                if self.current_token.value == 'IF U SAY SO':
+                    break
+                    
+                self.parse_line()
+                
+                if getattr(self, 'returning', False):
+                    break
+                    
+                self.advance_to_next_line()
+            
+            # Restore state
+            self.current_line_number = return_line
+            self.current_tokens = return_tokens
+            self.current_position = return_position
+            self.current_token = return_token
+            self.returning = False
+            
+        except ValueError as e:
+            self.log_syntax_error(str(e))
 
     def parse_line(self):
         print(f"\nParsing line {self.current_line_number}: {[t.value for t in self.current_tokens]}")
@@ -993,9 +1021,29 @@ class SyntaxAnalyzer:
             elif self.current_token.value == 'WTF?':
                 self.parse_switch()
                 return
+            elif self.current_token.value == 'FOUND YR':
+                self.advance_to_next_token()
+                if not self.current_token:
+                    self.log_syntax_error("Expected return value after 'FOUND YR'")
+                    return
+                
+                # Parse return value
+                ret_val = self.parse_expression()
+                self.semantics.return_value(ret_val)
+                self.returning = True
+                return
             elif self.current_token.value == 'GTFO':
                 # GTFO can be a break (in loops/switch) or void return (in functions)
                 self.advance_to_next_token()
+                
+                # If we are in a function and NOT in a loop/switch, it's a return
+                # For now, simplistic check: if we are executing a function (implied by usage)
+                # But we need to distinguish from loop break.
+                # Since we don't track loop depth robustly yet, we'll assume GTFO is return if not in switch
+                # Ideally we should track loop depth.
+                if not self.inside_switch_block: # And not in loop?
+                     self.semantics.return_void()
+                     self.returning = True
                 return
             elif self.current_token.value in ['OMG', 'OMGWTF']:
                 if not self.inside_switch_block:
