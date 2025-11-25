@@ -724,20 +724,6 @@ class SyntaxAnalyzer:
         self.advance_to_next_token()
 
         if not self.current_token or self.current_token.type != 'Variable Identifier':
-
-            if self.current_token.value in end_keywords:
-                break
-
-            self.advance_to_next_line()
-    
-    def parse_loop(self):
-        if self.current_token.value != 'IM IN YR':
-            self.log_syntax_error("Expected 'IM IN YR' to define a loop")
-            return
-
-        self.advance_to_next_token()
-
-        if not self.current_token or self.current_token.type != 'Variable Identifier':
             self.log_syntax_error("Expected loop label after 'IM IN YR'")
             return
 
@@ -1088,7 +1074,7 @@ class SyntaxAnalyzer:
             self.advance_to_next_token()
 
     def parse_functioncall(self):
-        """Parse function call syntax and delegate execution to semantics"""
+        # parse function call syntax and delegate execution to semantics
         if self.current_token.value != 'I IZ':
             self.log_syntax_error("Function call must start with 'I IZ'")
             return
