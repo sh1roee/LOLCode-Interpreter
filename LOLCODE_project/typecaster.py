@@ -1,32 +1,12 @@
-"""
-TypeCaster Module for LOLCODE Interpreter
-Handles all implicit and explicit type conversions/coercions
-following LOLCODE specification for consistent type handling.
-"""
+# this is the typecaster po
 
 class TypeCaster:
-    """
-    Centralized type casting.
-    Provides consistent implicit and explicit type conversions.
-    """
+    # Centralized type casting.
+    # Provides consistent implicit and explicit type conversions.
     
     @staticmethod
     def implicit_cast_to_numeric(value):
-        """
-        Implicitly cast a value to numeric (NUMBR or NUMBAR).
-        
-        LOLCODE type coercion rules for numeric:
-        - NUMBR/NUMBAR: Return as-is
-        - TROOF: WIN -> 1, FAIL -> 0
-        - YARN: Parse string to number if possible
-        - NOOB: Return None (cannot be converted)
-        
-        Args:
-            value: Value to convert to numeric
-            
-        Returns:
-            int or float if conversion successful, None otherwise
-        """
+        # Implicitly cast a value to numeric (NUMBR or NUMBAR).
         # Already numeric
         if isinstance(value, (int, float)):
             return value
@@ -64,21 +44,7 @@ class TypeCaster:
     
     @staticmethod
     def implicit_cast_to_troof(value):
-        """
-        Implicitly cast a value to TROOF (boolean).
-        
-        LOLCODE type coercion rules for TROOF:
-        - TROOF: Return as-is
-        - NUMBR/NUMBAR: 0 -> FAIL, non-zero -> WIN
-        - YARN: Empty string -> FAIL, non-empty -> WIN
-        - NOOB: -> FAIL
-        
-        Args:
-            value: Value to convert to boolean
-            
-        Returns:
-            bool (True for WIN, False for FAIL)
-        """
+        # Implicitly cast a value to TROOF (boolean).
         # Already boolean
         if isinstance(value, bool):
             return value
@@ -108,17 +74,7 @@ class TypeCaster:
     
     @staticmethod
     def implicit_cast_to_yarn(value):
-        """
-        Implicitly cast a value to YARN (string).
-        
-        All types can be converted to YARN.
-        
-        Args:
-            value: Value to convert to string
-            
-        Returns:
-            str representation of the value
-        """
+        # Implicitly cast a value to YARN (string).
         if isinstance(value, str):
             return value
         
@@ -135,20 +91,7 @@ class TypeCaster:
     
     @staticmethod
     def explicit_cast(value, target_type):
-        """
-        Explicitly cast a value to a target LOLCODE type.
-        Used for IS NOW A and MAEK operations.
-        
-        Args:
-            value: Value to cast
-            target_type: Target LOLCODE type ('NUMBR', 'NUMBAR', 'YARN', 'TROOF')
-            
-        Returns:
-            Converted value
-            
-        Raises:
-            ValueError: If conversion is not possible
-        """
+        # Explicitly cast a value to a target LOLCODE type.
         if target_type == 'NUMBR':
             numeric_val = TypeCaster.implicit_cast_to_numeric(value)
             if numeric_val is None:
@@ -176,16 +119,7 @@ class TypeCaster:
     
     @staticmethod
     def can_compare(value1, value2):
-        """
-        Check if two values can be compared.
-        
-        Args:
-            value1: First value
-            value2: Second value
-            
-        Returns:
-            bool: True if values can be compared
-        """
+        # Check if two values can be compared.
         # NOOB can only be compared with NOOB
         if value1 == 'NOOB' or value2 == 'NOOB':
             return value1 == 'NOOB' and value2 == 'NOOB'
@@ -202,15 +136,7 @@ class TypeCaster:
     
     @staticmethod
     def infer_type(value):
-        """
-        Infer the LOLCODE type of a value.
-        
-        Args:
-            value: Value to infer type for
-            
-        Returns:
-            str: LOLCODE type name
-        """
+        # Infer the LOLCODE type of a value.
         if isinstance(value, bool) or value in ['WIN', 'FAIL']:
             return 'TROOF'
         elif isinstance(value, int):

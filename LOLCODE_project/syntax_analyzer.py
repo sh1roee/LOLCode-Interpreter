@@ -74,9 +74,7 @@ class SyntaxAnalyzer:
         self.emit(error_message + "\n")
 
     def _get_input(self, prompt):
-        """
-        Get input from user - handles both GUI and command line contexts
-        """
+        # Get input from user - handles both GUI and command line contexts
         if self.input_function:
             # GUI context - use GUI's input method
             try:
@@ -178,11 +176,9 @@ class SyntaxAnalyzer:
             return None
 
     def evaluate_expression_tokens(self, tokens):
-        """
-        Evaluate an expression given a list of tokens by temporarily swapping
-        the parser state to those tokens, calling `parse_expression`, then
-        restoring the previous state.
-        """
+        # Evaluate an expression given a list of tokens by temporarily swapping
+        # the parser state to those tokens, calling `parse_expression`, then
+        # restoring the previous state.
         # save parser state
         saved_state = (
             self.current_line_number,
@@ -208,9 +204,7 @@ class SyntaxAnalyzer:
         return result
 
     def parse_and_evaluate_operation(self):
-        """
-        Parse and evaluate an operation, delegating computation to semantics
-        """
+        # Parse and evaluate an operation, delegating computation to semantics
         operation = self.current_token.value
         self.advance_to_next_token()
 
@@ -231,7 +225,7 @@ class SyntaxAnalyzer:
             return None
     
     def _parse_and_eval_unary_operation(self, operation):
-        """Parse and evaluate NOT operation using semantics"""
+        # Parse and evaluate NOT operation using semantics
         if not self.current_token:
             return None
         
@@ -250,7 +244,7 @@ class SyntaxAnalyzer:
         return result
     
     def _parse_and_eval_binary_operation(self, operation):
-        """Parse and evaluate arithmetic binary operations using semantics"""
+        # Parse and evaluate arithmetic binary operations using semantics
         # Get first operand
         first_operand = self.parse_expression()
         
@@ -274,7 +268,7 @@ class SyntaxAnalyzer:
         return result
     
     def _parse_and_eval_boolean_operation(self, operation):
-        """Parse and evaluate boolean operations using semantics"""
+        # Parse and evaluate boolean operations using semantics
         # Get first operand
         first_operand = self.parse_expression()
         
@@ -295,7 +289,7 @@ class SyntaxAnalyzer:
         return result
     
     def _parse_and_eval_comparison_operation(self, operation):
-        """Parse and evaluate comparison operations using semantics"""
+        # Parse and evaluate comparison operations using semantics
         # Get first operand
         first_operand = self.parse_expression()
         
@@ -346,7 +340,7 @@ class SyntaxAnalyzer:
             return result
     
     def _parse_and_eval_infinite_arity_operation(self, operation):
-        """Parse and evaluate ALL OF or ANY OF operations using semantics"""
+        # Parse and evaluate ALL OF or ANY OF operations using semantics
         operands = []
         
         while self.current_token and self.current_token.value != 'MKAY':
@@ -421,7 +415,7 @@ class SyntaxAnalyzer:
         return result
     
     def parse_and_evaluate_typecasting(self):
-        """Parse and evaluate MAEK A <var> <type> typecasting using semantics"""
+        # Parse and evaluate MAEK A <var> <type> typecasting using semantics
         if self.current_token.value == 'MAEK':
             self.advance_to_next_token()
 
@@ -638,25 +632,7 @@ class SyntaxAnalyzer:
         self.advance_to_next_token()
 
     def parse_conditional(self):
-        """
-        Parse and execute conditional logic (O RLY?) per LOLCODE specification
-        
-        Syntax: <expression> O RLY?
-                  YA RLY
-                    <code block>
-                  [MEBBE <expression>
-                    <code block>]...
-                  [NO WAI
-                    <code block>]
-                  OIC
-        
-        Semantics:
-        - Evaluates IT variable (set by expression before O RLY?)
-        - Executes YA RLY block if IT is WIN (true)
-        - Evaluates MEBBE expressions in order, executes first WIN block
-        - Executes NO WAI block only if no previous block executed
-        - Ensures ONLY ONE branch executes (mutually exclusive)
-        """
+        # Parse and execute conditional logic (O RLY?) per LOLCODE specification
         if self.current_token.value != 'O RLY?':
             self.log_syntax_error("Expected 'O RLY?' for conditional block")
             return
@@ -714,12 +690,7 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Expected 'OIC' to close 'O RLY?' block")
     
     def _execute_conditional_block(self, end_keywords):
-        """
-        Execute a conditional block until one of the end keywords is reached
-        
-        Args:
-            end_keywords: List of keywords that mark the end of this block
-        """
+        # Execute a conditional block until one of the end keywords is reached
         while True:
             if not self.current_token:
                 if not self.advance_to_next_line():
@@ -733,17 +704,26 @@ class SyntaxAnalyzer:
             self.advance_to_next_line()
     
     def _skip_conditional_block(self, end_keywords):
-        """
-        Skip a conditional block without executing until one of the end keywords is reached
-        
-        Args:
-            end_keywords: List of keywords that mark the end of this block
-        """
+        # Skip a conditional block without executing until one of the end keywords is reached
         while True:
             if not self.current_token:
                 if not self.advance_to_next_line():
                     break
                 continue
+
+            if self.current_token.value in end_keywords:
+                break
+
+            self.advance_to_next_line()
+    
+    def parse_loop(self):
+        if self.current_token.value != 'IM IN YR':
+            self.log_syntax_error("Expected 'IM IN YR' to define a loop")
+            return
+
+        self.advance_to_next_token()
+
+        if not self.current_token or self.current_token.type != 'Variable Identifier':
 
             if self.current_token.value in end_keywords:
                 break
