@@ -121,25 +121,7 @@ class SemanticsEvaluator:
         return 'WIN' if result else 'FAIL'
     
     def evaluate_relational_comparison(self, comparison_op, value, minmax_op, operand1, operand2):
-        """
-        Evaluate relational comparisons using BIGGR OF and SMALLR OF.
-        
-        LOLCODE relational comparison patterns:
-        - x >= y: BOTH SAEM x AN BIGGR OF x AN y
-        - x < y:  DIFFRINT x AN BIGGR OF x AN y
-        - x <= y: BOTH SAEM x AN SMALLR OF x AN y
-        - x > y:  DIFFRINT x AN SMALLR OF x AN y
-        
-        Args:
-            comparison_op: 'BOTH SAEM' or 'DIFFRINT'
-            value: The value to compare (x in the patterns above)
-            minmax_op: 'BIGGR OF' or 'SMALLR OF'
-            operand1: First operand of the min/max operation
-            operand2: Second operand of the min/max operation
-        
-        Returns:
-            'WIN' or 'FAIL'
-        """
+        # evaluate relational comparison using TypeCaster
         # Get types for error reporting
         type_val = self._get_operand_type(value)
         type1 = self._get_operand_type(operand1)
@@ -220,18 +202,13 @@ class SemanticsEvaluator:
         else:
             return token_value
     
+    # wrapper for TypeCaster.implicit_cast_to_numeric 
     def _to_numeric(self, value):
-        """
-        Wrapper for TypeCaster.implicit_cast_to_numeric for backward compatibility.
-        Use TypeCaster directly for new code.
-        """
         return TypeCaster.implicit_cast_to_numeric(value)
     
+    # get the LOLCODE type of an operand for error reporting
+    # uses TypeCaster for consistent type inference
     def _get_operand_type(self, value):
-        """
-        Get the LOLCODE type of an operand for error reporting.
-        Uses TypeCaster for consistent type inference.
-        """
         # check if it's a variable reference
         if isinstance(value, str) and value in self.symbol_table:
             return self.symbol_table[value].get('type', 'YARN')
@@ -239,11 +216,8 @@ class SemanticsEvaluator:
         # Use TypeCaster for type inference
         return TypeCaster.infer_type(value)
     
+    # wrapper for TypeCaster.implicit_cast_to_troof
     def _to_bool(self, value):
-        """
-        Wrapper for TypeCaster.implicit_cast_to_troof for backward compatibility.
-        Use TypeCaster directly for new code.
-        """
         return TypeCaster.implicit_cast_to_troof(value)
     
     # handle VISIBLE statement
@@ -280,8 +254,6 @@ class SemanticsEvaluator:
             
         return str_value
 
-
-    
     # ==================== VARIABLE MANAGEMENT ====================
     
     def declare_variable(self, variable_name, initial_value=None, initial_type=None):
@@ -402,16 +374,16 @@ class SemanticsEvaluator:
     # ==================== SWITCH-CASE EXECUTION ====================
     
     def match_case(self, switch_value, case_value): # check if switch value matches case value
-        return str(switch_value) == str(case_value)
+        return str(switch_value) == str(case_value) # compare switch value and case value
     
     # ==================== FUNCTION EXECUTION ====================
     
-    def define_function(self, function_name, parameters, body_start_line):
-        # define a function
-        if function_name in self.functions:
+    # define a function
+    def define_function(self, function_name, parameters, body_start_line): 
+        if function_name in self.functions: # check if function is already defined
             raise ValueError(f"Function '{function_name}' already defined")
         
-        # Validate parameters for duplicates
+        # validate parameters for duplicates
         self._validate_function_parameters(parameters)
         
         # store function info
@@ -422,28 +394,24 @@ class SemanticsEvaluator:
         }
     
     def _validate_function_parameters(self, parameters):
-        """
-        Validate function parameters for duplicates.
-        Raises ValueError if duplicate parameter names found.
-        """
-        seen = set()
-        for param in parameters:
-            if param in seen:
+        seen = set() # set of seen parameters
+        for param in parameters: # check for duplicate parameters
+            if param in seen: 
                 raise ValueError(f"Duplicate parameter name '{param}' in function definition")
             seen.add(param)
     
+    # prepare for function call by binding arguments to parameters
     def prepare_function_call(self, function_name, arguments):
-        # prepare for function call by binding arguments to parameters
-        if function_name not in self.functions:
+        if function_name not in self.functions: # check if function is defined
             raise ValueError(f"Function '{function_name}' not defined") 
         
         function_info = self.functions[function_name] # get function info
         parameters = function_info["parameters"] # get parameters
         
-        # Use semantic validation
+        # validate function arguments
         self.validate_function_arguments(function_name, len(parameters), len(arguments))
         
-        # Save previous values of parameters for scope management
+        # save previous values of parameters for scope management
         saved_values = {}
         for param in parameters:
             if param in self.symbol_table:
@@ -456,7 +424,7 @@ class SemanticsEvaluator:
                 "type": self._infer_type(arg)
             }
         
-        # Store saved values in function_info for restoration after call
+        # store saved values in function_info for restoration after call
         function_info["_saved_scope"] = saved_values
         
         return function_info
@@ -473,18 +441,18 @@ class SemanticsEvaluator:
         self.symbol_table["IT"] = {"value": "NOOB", "type": "NOOB"}
     
     def execute_function(self, function_name, arguments, parse_callback):
-        # Prepare function call (validates and binds parameters)
+        # prepare function call (validates and binds parameters)
         func_info = self.prepare_function_call(function_name, arguments)
         
-        # Execute the function body using the provided callback
-        # The callback handles the parsing/execution of statements
+        # execute the function body using the provided callback
+        # the callback handles the parsing/execution of statements
         try:
             parse_callback(func_info['body_start'], 'IF U SAY SO')
         finally:
-            # Always restore scope, even if execution fails
+            # always restore scope, even if execution fails
             self._restore_function_scope(func_info)
         
-        # Return the result from IT
+        # return the result from IT
         return self.symbol_table.get('IT', {}).get('value', 'NOOB')
     
     def _restore_function_scope(self, func_info):
@@ -495,13 +463,13 @@ class SemanticsEvaluator:
             
             for param in parameters:
                 if param in saved_scope:
-                    # Restore previous value
+                    # restore previous value
                     self.symbol_table[param] = saved_scope[param]
                 elif param in self.symbol_table:
-                    # Remove parameter if it didn't exist before
+                    # remove parameter if it didn't exist before
                     del self.symbol_table[param]
             
-            # Clean up
+            # clean up
             del func_info['_saved_scope']
     
     # ==================== RESULT STORAGE ====================
