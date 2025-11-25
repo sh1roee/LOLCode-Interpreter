@@ -155,10 +155,10 @@ class SyntaxAnalyzer:
             var_name = self.current_token.value
             try:
                 result = self.semantics.get_variable(var_name)
-            except ValueError:
-                # Variable not found - default to 0 for arithmetic operations
-                # This allows expressions like "SUM OF x AN 2" to work even if x is undefined
-                result = 0
+            except ValueError as e:
+                # Variable not declared - log error but continue with NOOB
+                self.log_syntax_error(f"Runtime Error: {str(e)}")
+                result = 'NOOB'
             self.advance_to_next_token()
             return result
         
@@ -266,8 +266,8 @@ class SyntaxAnalyzer:
         try:
             result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
             
-            # Infer result type
-            result_type = self.semantics._infer_type(result)
+            # Infer result type using semantics
+            result_type = self.semantics.infer_type(result)
             
             # Store result in IT variable using semantics
             self.semantics.store_result(result, result_type)
@@ -314,21 +314,56 @@ class SyntaxAnalyzer:
             return None
         self.advance_to_next_token()
         
-        # Get second operand
-        second_operand = self.parse_expression()
-        
-        # Use semantics to evaluate
-        try:
-            result = self.semantics.evaluate_comparison(operation, first_operand, second_operand)
+        # Check for relational comparison pattern:
+        # BOTH SAEM x AN BIGGR OF x AN y (x >= y)
+        # DIFFRINT x AN BIGGR OF x AN y (x < y)
+        # BOTH SAEM x AN SMALLR OF x AN y (x <= y)
+        # DIFFRINT x AN SMALLR OF x AN y (x > y)
+        if self.current_token and self.current_token.value in ['BIGGR OF', 'SMALLR OF']:
+            minmax_op = self.current_token.value
+            self.advance_to_next_token()
             
-            # Store result in IT variable using semantics
-            self.semantics.store_result(result, "TROOF")
+            # Get operands for BIGGR OF / SMALLR OF
+            minmax_operand1 = self.parse_expression()
             
-            return result
-        except ValueError as e:
-            # Handle semantic errors
-            self.log_syntax_error(f"Runtime Error: {str(e)}")
-            return "NOOB"
+            # Expect AN keyword
+            if not self.current_token or self.current_token.value != 'AN':
+                self.log_syntax_error(f"Expected 'AN' after first operand of {minmax_op}")
+                return "NOOB"
+            self.advance_to_next_token()
+            
+            minmax_operand2 = self.parse_expression()
+            
+            # Use semantics to evaluate relational comparison
+            try:
+                result = self.semantics.evaluate_relational_comparison(
+                    operation, first_operand, minmax_op, minmax_operand1, minmax_operand2
+                )
+                
+                # Store result in IT variable using semantics
+                self.semantics.store_result(result, "TROOF")
+                
+                return result
+            except ValueError as e:
+                # Handle semantic errors
+                self.log_syntax_error(f"Runtime Error: {str(e)}")
+                return "NOOB"
+        else:
+            # Regular comparison (BOTH SAEM or DIFFRINT)
+            second_operand = self.parse_expression()
+            
+            # Use semantics to evaluate
+            try:
+                result = self.semantics.evaluate_comparison(operation, first_operand, second_operand)
+                
+                # Store result in IT variable using semantics
+                self.semantics.store_result(result, "TROOF")
+                
+                return result
+            except ValueError as e:
+                # Handle semantic errors
+                self.log_syntax_error(f"Runtime Error: {str(e)}")
+                return "NOOB"
     
     def _parse_and_eval_infinite_arity_operation(self, operation):
         """Parse and evaluate ALL OF or ANY OF operations using semantics"""
@@ -381,8 +416,9 @@ class SyntaxAnalyzer:
                 var_name = self.current_token.value
                 try:
                     operands.append(self.semantics.get_variable(var_name))
-                except ValueError:
-                    operands.append(var_name)
+                except ValueError as e:
+                    self.log_syntax_error(f"Runtime Error: {str(e)}")
+                    operands.append('NOOB')
                 self.advance_to_next_token()
             elif self.current_token.type in ['Arithmetic Operation', 'Boolean Operation', 'Comparison Operation']:
                 result = self.parse_and_evaluate_operation()
@@ -392,8 +428,12 @@ class SyntaxAnalyzer:
             else:
                 break
         
-        # Use semantics to concatenate
-        result = self.semantics.evaluate_concatenation(operands)
+        # Use semantics to concatenate (includes validation)
+        try:
+            result = self.semantics.evaluate_concatenation(operands)
+        except ValueError as e:
+            self.log_syntax_error(f"Runtime Error: {str(e)}")
+            result = ''
         
         # Store in IT using semantics
         self.semantics.store_result(result, "YARN")
@@ -456,15 +496,12 @@ class SyntaxAnalyzer:
                 self.log_syntax_error(f"Missing expression to initialize variable '{variable_name}' after 'ITZ'")
                 return
 
-            if self.current_token.type == 'YARN Literal':
-                data_type = 'YARN'
-            elif self.current_token.type in ['NUMBR Literal', 'NUMBAR Literal', 'TROOF Literal']:
-                data_type = self.current_token.type.split()[0]
-            else:
-                data_type = None
-
             # Parse and evaluate expression to get actual value
             value = self.parse_expression()
+            
+            # Let semantics infer the type from the value
+            data_type = self.semantics.infer_type(value)
+            
             # Use semantics to declare variable
             try:
                 self.semantics.declare_variable(variable_name, value, data_type)
@@ -498,8 +535,8 @@ class SyntaxAnalyzer:
         # Parse and evaluate expression to get actual value
         value = self.parse_expression()
         
-        # Determine type based on value
-        data_type = self.semantics._infer_type(value)
+        # Determine type based on value using semantics
+        data_type = self.semantics.infer_type(value)
         
         # Use semantics to assign variable
         try:
@@ -870,6 +907,7 @@ class SyntaxAnalyzer:
         matched_case = False  # Track if a case has matched
         self.gtfo_in_switch = False  # Reset GTFO flag
         case_executed = False  # Track if a case has been executed (to skip remaining cases)
+        case_values = []  # Track case values for duplicate detection
 
         while True:
             if not self.current_token:
@@ -926,6 +964,10 @@ class SyntaxAnalyzer:
                     return
 
                 case_value = self.current_token.value
+                
+                # Track case value for duplicate detection
+                case_values.append(case_value)
+                
                 self.advance_to_next_line()
 
                 # Compare IT with case literal using semantics
@@ -1009,6 +1051,12 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Switch must end with 'OIC'")
         if not found_cases:
             self.log_syntax_error("Switch must have at least one case (OMG/OMGWTF)")
+        
+        # Validate for duplicate case values using semantics
+        try:
+            self.semantics.validate_switch_cases(case_values)
+        except ValueError as e:
+            self.log_syntax_error(str(e))
 
         self.inside_switch_block = False
         self.gtfo_in_switch = False  # Reset flag when exiting switch
@@ -1052,9 +1100,13 @@ class SyntaxAnalyzer:
 
         self.advance_to_next_line() 
         
-        # Store function definition with start line
+        # Store function definition with start line using semantics
         # We are currently at the first line of the body
-        self.semantics.define_function(function_name, parameters, self.current_line_number)
+        try:
+            self.semantics.define_function(function_name, parameters, self.current_line_number)
+        except ValueError as e:
+            self.log_syntax_error(str(e))
+            return
 
         # Skip function body
         while True: 
@@ -1076,6 +1128,7 @@ class SyntaxAnalyzer:
             self.advance_to_next_token()
 
     def parse_functioncall(self):
+        """Parse function call syntax and delegate execution to semantics"""
         if self.current_token.value != 'I IZ':
             self.log_syntax_error("Function call must start with 'I IZ'")
             return
@@ -1089,8 +1142,9 @@ class SyntaxAnalyzer:
         function_name = self.current_token.value
         self.advance_to_next_token()
         
+        # Parse arguments (syntax parsing only)
         arguments = []
-        while self.current_token: # parse arguments
+        while self.current_token:
             if self.current_token.value == 'YR':
                 self.advance_to_next_token()
 
@@ -1118,63 +1172,53 @@ class SyntaxAnalyzer:
                     break
             else:
                 break
-                
-        # Execute function
+        
+        # Delegate execution to semantics
         try:
-            func_info = self.semantics.prepare_function_call(function_name, arguments)
-            
-            # Save current state
-            return_line = self.current_line_number
-            return_tokens = self.current_tokens
-            return_position = self.current_position
-            return_token = self.current_token
-            
-            # Jump to function body
-            self.current_line_number = func_info['body_start']
-            self.current_tokens = self.lines[self.current_line_number]
-            self.current_position = 0
-            self.current_token = self.current_tokens[0] if self.current_tokens else None
-            
-            # Execute body
-            self.returning = False
-            while self.current_line_number is not None:
-                if not self.current_token:
-                    if not self.advance_to_next_line():
-                        break
-                    continue
-                    
-                if self.current_token.value == 'IF U SAY SO':
-                    break
-                    
-                self.parse_line()
+            # Create a callback for executing the function body
+            def execute_body(start_line, end_marker):
+                # Save current parser state
+                saved_state = (
+                    self.current_line_number,
+                    self.current_tokens,
+                    self.current_position,
+                    self.current_token
+                )
                 
-                if getattr(self, 'returning', False):
-                    break
-                    
-                self.advance_to_next_line()
-            
-            # Restore function parameter scope (remove parameters, restore previous values if any)
-            if '_saved_scope' in func_info:
-                saved_scope = func_info['_saved_scope']
-                parameters = func_info['parameters']
+                # Jump to function body
+                self.current_line_number = start_line
+                self.current_tokens = self.lines[self.current_line_number]
+                self.current_position = 0
+                self.current_token = self.current_tokens[0] if self.current_tokens else None
                 
-                for param in parameters:
-                    if param in saved_scope:
-                        # Restore previous value
-                        self.semantics.symbol_table[param] = saved_scope[param]
-                    elif param in self.semantics.symbol_table:
-                        # Remove parameter if it didn't exist before
-                        del self.semantics.symbol_table[param]
-                
-                # Clean up
-                del func_info['_saved_scope']
+                # Execute body until end marker or return
+                self.returning = False
+                try:
+                    while self.current_line_number is not None:
+                        if not self.current_token:
+                            if not self.advance_to_next_line():
+                                break
+                            continue
+                        
+                        if self.current_token.value == end_marker:
+                            break
+                        
+                        self.parse_line()
+                        
+                        if getattr(self, 'returning', False):
+                            break
+                        
+                        self.advance_to_next_line()
+                finally:
+                    # Restore parser state
+                    (self.current_line_number,
+                     self.current_tokens,
+                     self.current_position,
+                     self.current_token) = saved_state
+                    self.returning = False
             
-            # Restore state
-            self.current_line_number = return_line
-            self.current_tokens = return_tokens
-            self.current_position = return_position
-            self.current_token = return_token
-            self.returning = False
+            # Execute function via semantics (handles scope management)
+            self.semantics.execute_function(function_name, arguments, execute_body)
             
         except ValueError as e:
             self.log_syntax_error(str(e))
@@ -1256,7 +1300,7 @@ class SyntaxAnalyzer:
                 result = self.parse_expression()
                 
                 # Infer type using semantics
-                result_type = self.semantics._infer_type(result)
+                result_type = self.semantics.infer_type(result)
                 
                 # Store result in IT using semantics
                 self.semantics.store_result(result, result_type)
@@ -1280,7 +1324,7 @@ class SyntaxAnalyzer:
                             # Copy variable value to IT using semantics
                             try:
                                 var_value = self.semantics.get_variable(self.current_token.value)
-                                var_type = self.semantics._infer_type(var_value)
+                                var_type = self.semantics.infer_type(var_value)
                                 self.semantics.store_result(var_value, var_type)
                             except ValueError:
                                 self.log_syntax_error(f"Undefined variable '{self.current_token.value}'")
