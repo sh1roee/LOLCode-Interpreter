@@ -172,6 +172,36 @@ class SyntaxAnalyzer:
         else:
             return None
 
+    def evaluate_expression_tokens(self, tokens):
+        """
+        Evaluate an expression given a list of tokens by temporarily swapping
+        the parser state to those tokens, calling `parse_expression`, then
+        restoring the previous state.
+        """
+        # save parser state
+        saved_state = (
+            self.current_line_number,
+            self.current_tokens,
+            self.current_position,
+            self.current_token
+        )
+
+        # set temporary state for evaluation
+        self.current_tokens = tokens
+        self.current_position = 0
+        self.current_token = self.current_tokens[0] if self.current_tokens else None
+
+        try:
+            result = self.parse_expression()
+        finally:
+            # restore previous state
+            (self.current_line_number,
+             self.current_tokens,
+             self.current_position,
+             self.current_token) = saved_state
+
+        return result
+
     def parse_and_evaluate_operation(self):
         """
         Parse and evaluate an operation, delegating computation to semantics
@@ -716,6 +746,7 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Expected loop operation (UPPIN/NERFIN) after loop label")
             return
 
+        loop_operation = self.current_token.value  # 'UPPIN' or 'NERFIN'
         self.advance_to_next_token()
 
         if not self.current_token or self.current_token.value != 'YR':
@@ -728,31 +759,81 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Expected variable name after 'YR'")
             return
 
+        loop_variable = self.current_token.value
         self.advance_to_next_token()
 
         if not self.current_token or self.current_token.value not in ['TIL', 'WILE']:
             self.log_syntax_error("Expected loop condition (TIL/WILE) after loop variable")
             return
 
+        loop_type = self.current_token.value
         self.advance_to_next_token()
 
-        condition_expression = self.parse_expression()
-        if condition_expression is None:
+        # Instead of consuming the condition into a single value, capture the tokens
+        # that make up the condition expression so we can re-evaluate it each iteration.
+        condition_tokens = self.current_tokens[self.current_position:]
+        if not condition_tokens:
             self.log_syntax_error("Invalid loop condition expression")
             return
 
+        # Move to the first line of the loop body
         self.advance_to_next_line()
 
-        while True:
-            if not self.current_token:
-                if not self.advance_to_next_line():
-                    break
-                continue
+        # Save the start of the loop body so we can reset to it for each iteration
+        loop_body_start_line = self.current_line_number
+        loop_body_start_position = 0
 
-            if self.current_token.value == 'IM OUTTA YR':
+        # Main loop execution: evaluate condition each iteration using semantics
+        while True:
+            # Evaluate the condition using a helper that temporarily uses the
+            # captured tokens as the expression to parse/evaluate.
+            condition_value = self.evaluate_expression_tokens(condition_tokens)
+
+            # Ask semantics whether loop should continue
+            try:
+                should_continue = self.semantics.evaluate_loop_condition(loop_type, condition_value)
+            except Exception as e:
+                self.log_syntax_error(f"Runtime Error evaluating loop condition: {e}")
+                return
+
+            if not should_continue:
                 break
 
-            self.parse_line()
+            # Execute loop body from saved start
+            if loop_body_start_line is None:
+                break
+
+            self.current_line_number = loop_body_start_line
+            self.current_tokens = self.lines[self.current_line_number]
+            self.current_position = loop_body_start_position
+            self.current_token = self.current_tokens[self.current_position] if self.current_tokens else None
+
+            # Execute until we hit the loop terminator
+            while self.current_token and self.current_token.value != 'IM OUTTA YR':
+                self.parse_line()
+                if getattr(self, 'returning', False):
+                    break
+                self.advance_to_next_line()
+
+            # After executing body, update loop variable using semantics
+            try:
+                if loop_operation == 'UPPIN':
+                    self.semantics.increment_variable(loop_variable)
+                else:
+                    self.semantics.decrement_variable(loop_variable)
+            except Exception as e:
+                self.log_syntax_error(f"Runtime Error updating loop variable: {e}")
+                return
+
+            # Reset to loop body start for next iteration
+            # If the next token is the loop terminator, break out
+            if not self.current_line_number:
+                break
+
+        # After loop terminates, advance until we find the closing IM OUTTA YR
+        while self.current_token is None:
+            if self.current_line_number is None:
+                break
             self.advance_to_next_line()
 
         if not self.current_token or self.current_token.value != 'IM OUTTA YR':
