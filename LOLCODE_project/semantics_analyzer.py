@@ -16,74 +16,68 @@ class SemanticsEvaluator:
     
     # evaluate arithmetic operations
     def evaluate_arithmetic(self, operation, operand1, operand2):
-        # Get the original types for better error messages
-        type1 = self._get_operand_type(operand1)
-        type2 = self._get_operand_type(operand2)
-        
         # convert operands to numeric values using TypeCaster
         val1 = TypeCaster.implicit_cast_to_numeric(operand1)
         val2 = TypeCaster.implicit_cast_to_numeric(operand2)
         
-        # Check for invalid operands and provide specific error messages
-        if val1 is None:
-            if type1 == "NOOB":
-                raise ValueError(f"Cannot perform {operation} with NOOB value (first operand)")
-            else:
-                raise ValueError(f"Cannot convert {type1} value '{operand1}' to number for {operation}")
-        
-        if val2 is None:
-            if type2 == "NOOB":
-                raise ValueError(f"Cannot perform {operation} with NOOB value (second operand)")
-            else:
-                raise ValueError(f"Cannot convert {type2} value '{operand2}' to number for {operation}")
+        # NOOB propagation: if any operand is NOOB or cannot be converted, return NOOB
+        if val1 is None or val2 is None:
+            return 'NOOB'
 
-        # Check for division by zero with specific messages
+        # Check for division by zero - return NOOB instead of error
         if operation in ['QUOSHUNT OF', 'MOD OF'] and val2 == 0:
-            raise ValueError(f"Division by zero in {operation} operation")
+            return 'NOOB'
 
         # perform the operation
-        if operation == 'SUM OF':
-            result = val1 + val2
-        elif operation == 'DIFF OF':
-            result = val1 - val2
-        elif operation == 'PRODUKT OF':
-            result = val1 * val2
-        elif operation == 'QUOSHUNT OF':
-            result = val1 / val2
-        elif operation == 'MOD OF':
-            result = val1 % val2
-        elif operation == 'BIGGR OF':
-            result = max(val1, val2)
-        elif operation == 'SMALLR OF':
-            result = min(val1, val2)
-        else:
-            raise ValueError(f"Unknown arithmetic operation: {operation}")
-        
-        return result
+        try:
+            if operation == 'SUM OF':
+                result = val1 + val2
+            elif operation == 'DIFF OF':
+                result = val1 - val2
+            elif operation == 'PRODUKT OF':
+                result = val1 * val2
+            elif operation == 'QUOSHUNT OF':
+                result = val1 / val2
+            elif operation == 'MOD OF':
+                result = val1 % val2
+            elif operation == 'BIGGR OF':
+                result = max(val1, val2)
+            elif operation == 'SMALLR OF':
+                result = min(val1, val2)
+            else:
+                return 'NOOB'  # Unknown operation
+            
+            return result
+        except Exception:
+            # Any runtime error during operation returns NOOB
+            return 'NOOB'
 
     # evaluate boolean operations
     def evaluate_boolean(self, operation, operand1, operand2):
-        # get types for error reporting
-        type1 = self._get_operand_type(operand1)
-        type2 = self._get_operand_type(operand2)
+        # Check for NOOB operands - propagate NOOB
+        if operand1 == 'NOOB' or operand2 == 'NOOB':
+            return 'NOOB'
         
         # evaluate boolean operations using TypeCaster
         try:
             val1 = TypeCaster.implicit_cast_to_troof(operand1)
             val2 = TypeCaster.implicit_cast_to_troof(operand2)
         except Exception:
-            raise ValueError(f"Cannot perform boolean {operation} with types {type1} and {type2}")
+            return 'NOOB'  # Propagate NOOB on conversion error
         
-        if operation == 'BOTH OF':  # AND
-            result = val1 and val2
-        elif operation == 'EITHER OF':  # OR
-            result = val1 or val2
-        elif operation == 'WON OF':  # XOR
-            result = val1 != val2
-        else:
-            raise ValueError(f"Unknown boolean operation: {operation}")
-        
-        return 'WIN' if result else 'FAIL'
+        try:
+            if operation == 'BOTH OF':  # AND
+                result = val1 and val2
+            elif operation == 'EITHER OF':  # OR
+                result = val1 or val2
+            elif operation == 'WON OF':  # XOR
+                result = val1 ^ val2  # Use XOR operator instead of !=
+            else:
+                return 'NOOB'  # Unknown operation
+            
+            return 'WIN' if result else 'FAIL'
+        except Exception:
+            return 'NOOB'
     
     # evaluate comparison operations
     def evaluate_comparison(self, operation, operand1, operand2):
@@ -104,7 +98,7 @@ class SemanticsEvaluator:
                 elif operation == 'DIFFRINT':
                     result = not (type1 == "NOOB" and type2 == "NOOB")
                 else:
-                    raise ValueError(f"Cannot perform {operation} comparison with NOOB value")
+                    return 'NOOB'  # Relational comparison with NOOB returns NOOB
             else:
                 # try string comparison for non-NOOB values
                 val1 = str(operand1)
@@ -115,7 +109,7 @@ class SemanticsEvaluator:
                 elif operation == 'DIFFRINT':
                     result = val1 != val2
                 else:
-                    raise ValueError(f"Unknown comparison operation: {operation}")
+                    return 'NOOB'  # Unknown operation
         else:
             # numeric comparison
             if operation == 'BOTH SAEM':
@@ -123,7 +117,7 @@ class SemanticsEvaluator:
             elif operation == 'DIFFRINT':
                 result = val1 != val2
             else:
-                raise ValueError(f"Unknown comparison operation: {operation}")
+                return 'NOOB'  # Unknown operation
         
         return 'WIN' if result else 'FAIL'
     
@@ -157,43 +151,34 @@ class SemanticsEvaluator:
         val1 = TypeCaster.implicit_cast_to_numeric(operand1)
         val2 = TypeCaster.implicit_cast_to_numeric(operand2)
         
-        # Validate all operands are numeric
-        if val is None:
-            if type_val == "NOOB":
-                raise ValueError(f"Cannot perform relational comparison with NOOB value")
-            raise ValueError(f"Cannot convert {type_val} value '{value}' to number for relational comparison")
+        # NOOB propagation: if any operand cannot be converted, return NOOB
+        if val is None or val1 is None or val2 is None:
+            return 'NOOB'
         
-        if val1 is None:
-            if type1 == "NOOB":
-                raise ValueError(f"Cannot perform {minmax_op} with NOOB value (first operand)")
-            raise ValueError(f"Cannot convert {type1} value '{operand1}' to number for {minmax_op}")
-        
-        if val2 is None:
-            if type2 == "NOOB":
-                raise ValueError(f"Cannot perform {minmax_op} with NOOB value (second operand)")
-            raise ValueError(f"Cannot convert {type2} value '{operand2}' to number for {minmax_op}")
-        
-        # Evaluate the min/max operation
-        if minmax_op == 'BIGGR OF':
-            minmax_result = max(val1, val2)
-        elif minmax_op == 'SMALLR OF':
-            minmax_result = min(val1, val2)
-        else:
-            raise ValueError(f"Unknown min/max operation: {minmax_op}")
-        
-        # Compare value with min/max result
-        if comparison_op == 'BOTH SAEM':
-            # BOTH SAEM x AN BIGGR OF x AN y => x >= y (x equals max of x and y)
-            # BOTH SAEM x AN SMALLR OF x AN y => x <= y (x equals min of x and y)
-            result = val == minmax_result
-        elif comparison_op == 'DIFFRINT':
-            # DIFFRINT x AN BIGGR OF x AN y => x < y (x differs from max of x and y)
-            # DIFFRINT x AN SMALLR OF x AN y => x > y (x differs from min of x and y)
-            result = val != minmax_result
-        else:
-            raise ValueError(f"Unknown comparison operation: {comparison_op}")
-        
-        return 'WIN' if result else 'FAIL'
+        try:
+            # Evaluate the min/max operation
+            if minmax_op == 'BIGGR OF':
+                minmax_result = max(val1, val2)
+            elif minmax_op == 'SMALLR OF':
+                minmax_result = min(val1, val2)
+            else:
+                return 'NOOB'  # Unknown operation
+            
+            # Compare value with min/max result
+            if comparison_op == 'BOTH SAEM':
+                # BOTH SAEM x AN BIGGR OF x AN y => x >= y (x equals max of x and y)
+                # BOTH SAEM x AN SMALLR OF x AN y => x <= y (x equals min of x and y)
+                result = val == minmax_result
+            elif comparison_op == 'DIFFRINT':
+                # DIFFRINT x AN BIGGR OF x AN y => x < y (x differs from max of x and y)
+                # DIFFRINT x AN SMALLR OF x AN y => x > y (x differs from min of x and y)
+                result = val != minmax_result
+            else:
+                return 'NOOB'  # Unknown operation
+            
+            return 'WIN' if result else 'FAIL'
+        except Exception:
+            return 'NOOB'
     
     # evaluate unary NOT operation
     def evaluate_unary_not(self, operand):

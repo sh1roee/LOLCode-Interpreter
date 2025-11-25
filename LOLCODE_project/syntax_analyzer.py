@@ -262,21 +262,16 @@ class SyntaxAnalyzer:
         # Get second operand
         second_operand = self.parse_expression()
         
-        # Use semantics to evaluate
-        try:
-            result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
-            
-            # Infer result type using semantics
-            result_type = self.semantics.infer_type(result)
-            
-            # Store result in IT variable using semantics
-            self.semantics.store_result(result, result_type)
-            
-            return result
-        except ValueError as e:
-            # Handle semantic errors
-            self.log_syntax_error(f"Runtime Error: {str(e)}")
-            return "NOOB"
+        # Use semantics to evaluate (returns NOOB on error)
+        result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
+        
+        # Infer result type using semantics
+        result_type = self.semantics.infer_type(result)
+        
+        # Store result in IT variable using semantics
+        self.semantics.store_result(result, result_type)
+        
+        return result
     
     def _parse_and_eval_boolean_operation(self, operation):
         """Parse and evaluate boolean operations using semantics"""
@@ -291,18 +286,13 @@ class SyntaxAnalyzer:
         # Get second operand
         second_operand = self.parse_expression()
         
-        # Use semantics to evaluate
-        try:
-            result = self.semantics.evaluate_boolean(operation, first_operand, second_operand)
-            
-            # Store result in IT variable using semantics
-            self.semantics.store_result(result, "TROOF")
-            
-            return result
-        except ValueError as e:
-            # Handle semantic errors
-            self.log_syntax_error(f"Runtime Error: {str(e)}")
-            return "NOOB"
+        # Use semantics to evaluate (returns NOOB on error)
+        result = self.semantics.evaluate_boolean(operation, first_operand, second_operand)
+        
+        # Store result in IT variable using semantics
+        self.semantics.store_result(result, "TROOF")
+        
+        return result
     
     def _parse_and_eval_comparison_operation(self, operation):
         """Parse and evaluate comparison operations using semantics"""
@@ -334,36 +324,26 @@ class SyntaxAnalyzer:
             
             minmax_operand2 = self.parse_expression()
             
-            # Use semantics to evaluate relational comparison
-            try:
-                result = self.semantics.evaluate_relational_comparison(
-                    operation, first_operand, minmax_op, minmax_operand1, minmax_operand2
-                )
-                
-                # Store result in IT variable using semantics
-                self.semantics.store_result(result, "TROOF")
-                
-                return result
-            except ValueError as e:
-                # Handle semantic errors
-                self.log_syntax_error(f"Runtime Error: {str(e)}")
-                return "NOOB"
+            # Use semantics to evaluate relational comparison (returns NOOB on error)
+            result = self.semantics.evaluate_relational_comparison(
+                operation, first_operand, minmax_op, minmax_operand1, minmax_operand2
+            )
+            
+            # Store result in IT variable using semantics
+            self.semantics.store_result(result, "TROOF")
+            
+            return result
         else:
             # Regular comparison (BOTH SAEM or DIFFRINT)
             second_operand = self.parse_expression()
             
-            # Use semantics to evaluate
-            try:
-                result = self.semantics.evaluate_comparison(operation, first_operand, second_operand)
-                
-                # Store result in IT variable using semantics
-                self.semantics.store_result(result, "TROOF")
-                
-                return result
-            except ValueError as e:
-                # Handle semantic errors
-                self.log_syntax_error(f"Runtime Error: {str(e)}")
-                return "NOOB"
+            # Use semantics to evaluate (returns NOOB on error)
+            result = self.semantics.evaluate_comparison(operation, first_operand, second_operand)
+            
+            # Store result in IT variable using semantics
+            self.semantics.store_result(result, "TROOF")
+            
+            return result
     
     def _parse_and_eval_infinite_arity_operation(self, operation):
         """Parse and evaluate ALL OF or ANY OF operations using semantics"""
