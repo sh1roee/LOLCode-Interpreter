@@ -466,12 +466,21 @@ class SemanticsEvaluator:
         if len(arguments) != len(parameters): # check if number of arguments matches
             raise ValueError(f"Function '{function_name}' expects {len(parameters)} arguments, got {len(arguments)}")
         
+        # Save previous values of parameters for scope management
+        saved_values = {}
+        for param in parameters:
+            if param in self.symbol_table:
+                saved_values[param] = self.symbol_table[param].copy()
+        
         # bind arguments to parameters in symbol table
         for param, arg in zip(parameters, arguments):
             self.symbol_table[param] = {
                 "value": arg,
                 "type": self._infer_type(arg)
             }
+        
+        # Store saved values in function_info for restoration after call
+        function_info["_saved_scope"] = saved_values
         
         return function_info
     
