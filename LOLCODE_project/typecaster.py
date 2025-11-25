@@ -6,7 +6,7 @@ following LOLCODE specification for consistent type handling.
 
 class TypeCaster:
     """
-    Centralized type casting utility for LOLCODE interpreter.
+    Centralized type casting.
     Provides consistent implicit and explicit type conversions.
     """
     

@@ -12,7 +12,6 @@ class SemanticsEvaluator:
         self.output_buffer = []
         self.emit_function = emit_function  # For GUI output
         self.functions = {}  # Function storage
-        self.type_caster = TypeCaster()
     
     # evaluate arithmetic operations
     def evaluate_arithmetic(self, operation, operand1, operand2):
@@ -281,32 +280,7 @@ class SemanticsEvaluator:
             
         return str_value
 
-    def _infer_input_type(self, value):
-        # infer the LOLCODE type from input value
-        if value == "NOOB":
-            return "NOOB"
-        
-        # Check for TROOF values
-        value_upper = value.upper()
-        if value_upper in ["WIN", "FAIL"]:
-            return "TROOF"
-        
-        # Check for NUMBR (integer)
-        try:
-            int(value)
-            return "NUMBR"
-        except ValueError:
-            pass
-        
-        # Check for NUMBAR (float)
-        try:
-            float(value)
-            return "NUMBAR"
-        except ValueError:
-            pass
-        
-        # Default to YARN (string)
-        return "YARN"
+
     
     # ==================== VARIABLE MANAGEMENT ====================
     
