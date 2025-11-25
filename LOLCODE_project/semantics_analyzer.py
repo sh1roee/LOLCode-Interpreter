@@ -473,25 +473,6 @@ class SemanticsEvaluator:
         self.symbol_table["IT"] = {"value": "NOOB", "type": "NOOB"}
     
     def execute_function(self, function_name, arguments, parse_callback):
-        """
-        Execute a function with given arguments.
-        This method handles all semantic aspects of function execution:
-        - Validates function exists
-        - Validates argument count
-        - Binds arguments to parameters
-        - Manages function scope
-        - Executes function body via callback
-        - Restores scope after execution
-        
-        Args:
-            function_name: Name of the function to execute
-            arguments: List of argument values
-            parse_callback: Callback function to parse/execute the function body
-                           Should accept (start_line, end_marker) and return when done
-        
-        Returns:
-            The return value stored in IT after function execution
-        """
         # Prepare function call (validates and binds parameters)
         func_info = self.prepare_function_call(function_name, arguments)
         
@@ -507,10 +488,7 @@ class SemanticsEvaluator:
         return self.symbol_table.get('IT', {}).get('value', 'NOOB')
     
     def _restore_function_scope(self, func_info):
-        """
-        Restore the symbol table scope after function execution.
-        Removes parameters and restores any previous values.
-        """
+        # restore previous scope after function execution
         if '_saved_scope' in func_info:
             saved_scope = func_info['_saved_scope']
             parameters = func_info['parameters']
@@ -667,28 +645,19 @@ class SemanticsEvaluator:
     # ==================== SEMANTIC VALIDATION METHODS ====================
     
     def check_variable_declared(self, variable_name):
-        """
-        Check if a variable is declared in the symbol table.
-        Raises ValueError if not declared.
-        """
+        # Check if a variable is declared.
         if variable_name not in self.symbol_table:
             raise ValueError(f"Variable '{variable_name}' used before declaration")
         return True
     
     def check_variable_not_redeclared(self, variable_name):
-        """
-        Check if a variable is NOT already declared (for new declarations).
-        Raises ValueError if already declared.
-        """
+        # Check if a variable is not redeclared.
         if variable_name in self.symbol_table:
             raise ValueError(f"Variable '{variable_name}' is already declared")
         return True
     
     def validate_numeric_operand(self, value, operation_name, operand_position=""):
-        """
-        Validate that an operand can be converted to a numeric value.
-        Raises ValueError with descriptive message if invalid.
-        """
+        # Validate that an operand is numeric for arithmetic operations.
         operand_type = self._get_operand_type(value)
         
         if operand_type == "NOOB":
@@ -701,19 +670,13 @@ class SemanticsEvaluator:
         return numeric_val
     
     def validate_division_by_zero(self, divisor, operation_name):
-        """
-        Check for division by zero.
-        Raises ValueError if divisor is zero.
-        """
+        # Validate that divisor is not zero for division/modulus operations.
         if divisor == 0:
             raise ValueError(f"Division by zero in {operation_name} operation")
         return True
     
     def validate_concatenation_operands(self, operands):
-        """
-        Validate SMOOSH operation has at least 2 operands.
-        Raises ValueError if insufficient operands.
-        """
+        # Validate that SMOOSH has at least 2 operands.
         if not operands:
             raise ValueError("SMOOSH requires at least 2 operands, got 0")
         elif len(operands) == 1:
@@ -721,10 +684,7 @@ class SemanticsEvaluator:
         return True
     
     def validate_loop_variable(self, variable_name):
-        """
-        Validate that a loop variable exists and can be incremented/decremented.
-        Raises ValueError if invalid.
-        """
+        # Validate that loop variable is declared and numeric.
         if variable_name not in self.symbol_table:
             raise ValueError(f"Loop variable '{variable_name}' not declared")
         
@@ -737,10 +697,7 @@ class SemanticsEvaluator:
         return True
     
     def validate_switch_cases(self, case_values):
-        """
-        Check for duplicate case values in switch statement.
-        Raises ValueError if duplicates found.
-        """
+        # Validate that switch cases are unique.
         seen = set()
         for case_value in case_values:
             if case_value in seen:
@@ -749,10 +706,7 @@ class SemanticsEvaluator:
         return True
     
     def validate_function_arguments(self, function_name, expected_count, actual_count):
-        """
-        Validate that function call has correct number of arguments.
-        Raises ValueError if mismatch.
-        """
+        # Validate that function is called with correct number of arguments.
         if actual_count != expected_count:
             raise ValueError(f"Function '{function_name}' expects {expected_count} argument(s), got {actual_count}")
         return True
