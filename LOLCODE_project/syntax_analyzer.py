@@ -605,9 +605,15 @@ class SyntaxAnalyzer:
             else:
                 break
 
+        # Check for newline suppression (!) at the end
+        suppress_newline = False
+        if self.current_token and self.current_token.value == '!':
+            suppress_newline = True
+            self.advance_to_next_token()
+
         # Use semantics to execute output
         if output:
-            self.semantics.execute_output(output)
+            self.semantics.execute_output(output, suppress_newline)
 
     def parse_input(self):
         self.advance_to_next_token()
@@ -864,9 +870,9 @@ class SyntaxAnalyzer:
         found_cases = False
         matched_case = False  # Track if a case has matched
         self.gtfo_in_switch = False  # Reset GTFO flag
-        case_executed = False  # Track if a case has been executed (to skip remaining cases)
         case_values = []  # Track case values for duplicate detection
-
+        
+        # We use 'matched_case' to indicate we are in the "executing" state (either matched or falling through).
         while True:
             if not self.current_token:
                 if not self.advance_to_next_line():
@@ -876,42 +882,18 @@ class SyntaxAnalyzer:
             if self.current_token.value == 'OIC':
                 break
 
-            # If a case was executed or GTFO was encountered, skip all remaining cases to OIC
-            if case_executed or self.gtfo_in_switch:
-                # Skip OMG and OMGWTF tokens until we find OIC
-                if self.current_token.value == 'OMG':
-                    # Skip the OMG case entirely
-                    self.advance_to_next_token()  # Skip 'OMG'
-                    if self.current_token and self.current_token.type in ['NUMBR Literal', 'NUMBAR Literal', 'YARN Literal', 'TROOF Literal']:
-                        self.advance_to_next_line()  # Skip the literal and move to next line
-                    # Skip the case body
-                    while True:
-                        if not self.current_token:
-                            if not self.advance_to_next_line():
-                                break
-                            continue
-                        if self.current_token.value in ['OMG', 'OMGWTF', 'OIC']:
+            # If GTFO was encountered, we must skip everything until OIC
+            if self.gtfo_in_switch:
+                # Skip until OIC
+                while True:
+                    if not self.current_token:
+                        if not self.advance_to_next_line():
                             break
-                        self.advance_to_next_line()
-                    continue
-                elif self.current_token.value == 'OMGWTF':
-                    # Skip the OMGWTF case entirely
+                        continue
+                    if self.current_token.value == 'OIC':
+                        break
                     self.advance_to_next_line()
-                    while True:
-                        if not self.current_token:
-                            if not self.advance_to_next_line():
-                                break
-                            continue
-                        if self.current_token.value == 'OIC':
-                            break
-                        self.advance_to_next_line()
-                    continue
-                elif self.current_token.value == 'OIC':
-                    break
-                else:
-                    # Skip any other tokens
-                    self.advance_to_next_line()
-                    continue
+                continue
 
             if self.current_token.value == 'OMG':
                 found_cases = True
@@ -928,10 +910,18 @@ class SyntaxAnalyzer:
                 
                 self.advance_to_next_line()
 
-                # Compare IT with case literal using semantics
-                if not matched_case and self.semantics.match_case(switch_value, case_value):
+                # Check if we should execute this case
+                # Execute if:
+                # 1. We are already falling through (matched_case is True)
+                # 2. OR the case value matches the switch value
+                should_execute = False
+                if matched_case:
+                    should_execute = True
+                elif self.semantics.match_case(switch_value, case_value):
                     matched_case = True
-                    case_executed = True
+                    should_execute = True
+                
+                if should_execute:
                     # Execute this case block
                     while True:
                         if not self.current_token:
@@ -948,11 +938,8 @@ class SyntaxAnalyzer:
 
                         self.parse_line()
                         self.advance_to_next_line()
-                    
-                    # After case executes, continue to skip remaining cases
-                    continue
                 else:
-                    # Skip this case block - doesn't match
+                    # Skip this case block
                     while True:
                         if not self.current_token:
                             if not self.advance_to_next_line():
@@ -964,46 +951,31 @@ class SyntaxAnalyzer:
 
                         self.advance_to_next_line()
 
-            elif self.current_token.value == 'OMGWTF':
-                found_cases = True
-                # Only execute default if no case matched
-                if not matched_case:
-                    case_executed = True
+            elif self.current_token.value == 'OMGWTF': # found a case
+                found_cases = True 
+                self.advance_to_next_line() # skip to next line
+                
+                # Execute default block
+                while True: # loop until end of switch block
+                    if not self.current_token:
+                        if not self.advance_to_next_line():
+                            break
+                        continue
+
+                    if self.current_token.value == 'OIC':
+                        break
+
+                    # Check for GTFO flag set by parse_line
+                    if self.gtfo_in_switch:
+                        break
+
+                    self.parse_line()
                     self.advance_to_next_line()
-
-                    while True:
-                        if not self.current_token:
-                            if not self.advance_to_next_line():
-                                break
-                            continue
-
-                        if self.current_token.value == 'OIC':
-                            break
-
-                        # Check for GTFO flag set by parse_line
-                        if self.gtfo_in_switch:
-                            break
-
-                        self.parse_line()
-                        self.advance_to_next_line()
                     
-                    # After default executes, continue to skip (though we're already at OIC)
-                    continue
-                else:
-                    # Skip default case - a case already matched
-                    while True:
-                        if not self.current_token:
-                            if not self.advance_to_next_line():
-                                break
-                            continue
-
-                        if self.current_token.value == 'OIC':
-                            break
-
-                        self.advance_to_next_line()
             else:
-                self.parse_line()
-                self.advance_to_next_line()
+                # parse line
+                self.parse_line() 
+                self.advance_to_next_line() # skip to next line
 
         if not self.current_token or self.current_token.value != 'OIC':
             self.log_syntax_error("Switch must end with 'OIC'")

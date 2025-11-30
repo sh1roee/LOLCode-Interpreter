@@ -298,17 +298,17 @@ class SemanticsEvaluator:
     
     # ==================== OUTPUT EXECUTION ====================
     
-    def execute_output(self, output_parts):
+    def execute_output(self, output_parts, suppress_newline=False):
         # execute visible statement - output to console
         output_strings = []
         for part in output_parts:
             output_strings.append(str(part))
         
-        final_output = " ".join(output_strings) # concatenate output strings
+        final_output = "".join(output_strings) # concatenate output strings
         
         # emit to GUI if available
         if self.emit_function:
-            self.emit_function(final_output + "\n")
+            self.emit_function(final_output + ("" if suppress_newline else "\n"))
         
         # store in IT
         self.symbol_table["IT"] = {"value": final_output, "type": "YARN"}
