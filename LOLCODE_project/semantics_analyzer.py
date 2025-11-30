@@ -316,9 +316,18 @@ class SemanticsEvaluator:
         # emit to GUI if available
         if self.emit_function:
             self.emit_function(final_output + "\n")
+
+        if len(output_parts) == 1:
+            # If single expression, store its actual value and type
+            value_to_store = output_parts[0]
+            it_type = TypeCaster.infer_type(value_to_store)
+        else:
+            # For multiple parts, keep it as concatenated string
+            value_to_store = final_output
+            it_type = "YARN"
         
-        # store in IT
-        self.symbol_table["IT"] = {"value": final_output, "type": "YARN"}
+        # store with proper data type
+        self.symbol_table["IT"] = {"value": value_to_store,"type": it_type}
         
         return final_output
     
