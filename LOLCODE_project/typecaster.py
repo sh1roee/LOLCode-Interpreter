@@ -62,6 +62,17 @@ class TypeCaster:
             if value == 'NOOB' or value == '':
                 return False
             
+            # If YARN looks numeric, use numeric truthiness ("0" -> False)
+            try:
+                if '.' in value:
+                    num = float(value)
+                else:
+                    num = int(value)
+                return num != 0
+            except ValueError:
+                # Not numeric; fall back to non-empty string truthiness
+                pass
+            
             # Non-empty YARN is truthy
             return len(value) > 0
         

@@ -772,6 +772,7 @@ class SyntaxAnalyzer:
         loop_body_start_position = 0
 
         # Main loop execution: evaluate condition each iteration using semantics
+        loop_executed_at_least_once = False
         while True:
             # Evaluate the condition using a helper that temporarily uses the
             # captured tokens as the expression to parse/evaluate.
@@ -786,6 +787,8 @@ class SyntaxAnalyzer:
 
             if not should_continue:
                 break
+
+            loop_executed_at_least_once = True
 
             # Execute loop body from saved start
             if loop_body_start_line is None:
@@ -819,10 +822,19 @@ class SyntaxAnalyzer:
                 break
 
         # After loop terminates, advance until we find the closing IM OUTTA YR
-        while self.current_token is None:
-            if self.current_line_number is None:
-                break
-            self.advance_to_next_line()
+        # If loop never executed, we need to skip the body to find IM OUTTA YR
+        if not loop_executed_at_least_once:
+            # Skip lines until we find IM OUTTA YR
+            while self.current_line_number is not None:
+                if self.current_token and self.current_token.value == 'IM OUTTA YR':
+                    break
+                self.advance_to_next_line()
+        else:
+            # Loop executed at least once, current_token might be None or at IM OUTTA YR
+            while self.current_token is None:
+                if self.current_line_number is None:
+                    break
+                self.advance_to_next_line()
 
         if not self.current_token or self.current_token.value != 'IM OUTTA YR':
             self.log_syntax_error(f"Expected 'IM OUTTA YR {loop_label}' to close loop")
