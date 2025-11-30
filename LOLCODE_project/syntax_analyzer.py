@@ -1263,7 +1263,7 @@ class SyntaxAnalyzer:
             self.log_syntax_error(str(e))
 
     def parse_line(self):
-        print(f"\nParsing line {self.current_line_number}: {[t.value for t in self.current_tokens]}")
+        # print(f"\nParsing line {self.current_line_number}: {[t.value for t in self.current_tokens]}")
 
         while self.current_token:
             # check for invalid tokens first
