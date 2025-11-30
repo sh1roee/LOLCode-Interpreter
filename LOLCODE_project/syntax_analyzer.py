@@ -30,6 +30,13 @@ class SyntaxAnalyzer:
         
         # Flag to track GTFO in switch blocks
         self.gtfo_in_switch = False
+        
+        # Flags to track GTFO in loops
+        self.inside_loop = False
+        self.gtfo_in_loop = False
+        
+        # Track explicit typecast type for proper assignment
+        self._last_typecast_type = None
 
     def emit(self, message):
         if message is None:
@@ -42,6 +49,17 @@ class SyntaxAnalyzer:
         else:
             print(message)
 
+    def _is_valid_variable_name(self, name):
+        """
+        Validate variable name according to LOLCODE spec:
+        - Must start with a letter
+        - Followed by any combination of letters, numbers, and underscores
+        - No spaces, dashes, or other special symbols
+        """
+        import re
+        # Pattern: starts with letter, followed by letters/numbers/underscores
+        pattern = r'^[a-zA-Z][a-zA-Z0-9_]*$'
+        return bool(re.match(pattern, name))
 
     def _organize_tokens_by_line(self, tokens):
         # group all tokens by their line numbers so we can process line by line
@@ -256,8 +274,12 @@ class SyntaxAnalyzer:
         # Get second operand
         second_operand = self.parse_expression()
         
-        # Use semantics to evaluate (returns NOOB on error)
-        result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
+        # Use semantics to evaluate - raises error if typecast fails
+        try:
+            result = self.semantics.evaluate_arithmetic(operation, first_operand, second_operand)
+        except ValueError as e:
+            self.log_syntax_error(f"Runtime Error: {e}")
+            return 'NOOB'
         
         # Infer result type using semantics
         result_type = self.semantics.infer_type(result)
@@ -318,10 +340,14 @@ class SyntaxAnalyzer:
             
             minmax_operand2 = self.parse_expression()
             
-            # Use semantics to evaluate relational comparison (returns NOOB on error)
-            result = self.semantics.evaluate_relational_comparison(
-                operation, first_operand, minmax_op, minmax_operand1, minmax_operand2
-            )
+            # Use semantics to evaluate relational comparison - raises error if typecast fails
+            try:
+                result = self.semantics.evaluate_relational_comparison(
+                    operation, first_operand, minmax_op, minmax_operand1, minmax_operand2
+                )
+            except ValueError as e:
+                self.log_syntax_error(f"Runtime Error: {e}")
+                return "NOOB"
             
             # Store result in IT variable using semantics
             self.semantics.store_result(result, "TROOF")
@@ -339,8 +365,13 @@ class SyntaxAnalyzer:
             
             return result
     
-    def _parse_and_eval_infinite_arity_operation(self, operation):
+    def _parse_and_eval_infinite_arity_operation(self, operation, nested=False):
         # Parse and evaluate ALL OF or ANY OF operations using semantics
+        # ALL OF and ANY OF cannot be nested into each other or themselves
+        if nested:
+            self.log_syntax_error(f"Cannot nest {operation} inside another ALL OF or ANY OF")
+            return 'NOOB'
+        
         operands = []
         
         while self.current_token and self.current_token.value != 'MKAY':
@@ -349,7 +380,12 @@ class SyntaxAnalyzer:
                 self.advance_to_next_token()
                 continue
             
-            # Evaluate operand
+            # Check for nested ALL OF or ANY OF - NOT allowed
+            if self.current_token and self.current_token.value in ['ALL OF', 'ANY OF']:
+                self.log_syntax_error(f"Cannot nest {self.current_token.value} inside {operation}")
+                return 'NOOB'
+            
+            # Evaluate operand (other boolean ops like NOT, BOTH OF, etc. are allowed)
             operand = self.parse_expression()
             if operand is not None:
                 operands.append(operand)
@@ -359,6 +395,8 @@ class SyntaxAnalyzer:
         # Consume MKAY
         if self.current_token and self.current_token.value == 'MKAY':
             self.advance_to_next_token()
+        else:
+            self.log_syntax_error(f"Expected 'MKAY' to close {operation}")
         
         # Use semantics to evaluate
         result = self.semantics.evaluate_infinite_arity(operation, operands)
@@ -415,18 +453,18 @@ class SyntaxAnalyzer:
         return result
     
     def parse_and_evaluate_typecasting(self):
-        # Parse and evaluate MAEK A <var> <type> typecasting using semantics
+        # Parse and evaluate MAEK [A] <var> <type> typecasting using semantics
+        # MAEK returns the typecast value to IT, does NOT modify the original variable
+        # Syntax: MAEK var1 A NUMBAR  OR  MAEK var1 NUMBAR (A is optional)
         if self.current_token.value == 'MAEK':
             self.advance_to_next_token()
 
-            if not self.current_token or self.current_token.value != 'A':
-                self.log_syntax_error("Expected 'A' after 'MAEK'")
-                return None
-
-            self.advance_to_next_token()
+            # 'A' is optional after MAEK
+            if self.current_token and self.current_token.value == 'A':
+                self.advance_to_next_token()
 
             if not self.current_token:
-                self.log_syntax_error("Expected value to cast after 'MAEK A'")
+                self.log_syntax_error("Expected value to cast after 'MAEK'")
                 return None
 
             # Get the value to cast
@@ -440,20 +478,40 @@ class SyntaxAnalyzer:
                 cast_value = self.current_token.value
             
             self.advance_to_next_token()
+            
+            # Check for optional 'A' between value and type (MAEK var A TYPE)
+            if self.current_token and self.current_token.value == 'A':
+                self.advance_to_next_token()
 
             if not self.current_token or self.current_token.type != 'Type Literal':
-                self.log_syntax_error("Expected type literal after value in 'MAEK A' operation")
+                self.log_syntax_error("Expected type literal in MAEK operation")
                 return None
 
             target_type = self.current_token.value
             self.advance_to_next_token()
+            
+            # Store the explicit target type for use in assignment
+            self._last_typecast_type = target_type
 
-            # Use semantics to perform typecast
-            return self.semantics.typecast_value(cast_value, target_type)
+            # Use semantics to perform typecast - handle errors gracefully
+            try:
+                return self.semantics.typecast_value(cast_value, target_type)
+            except ValueError as e:
+                self.log_syntax_error(f"Runtime Error: {e}")
+                return 'NOOB'
         
         return None
 
     def parse_variable_declaration(self):
+        # Enforce that variable declarations must be inside WAZZUP block
+        if not self.in_wazzup_block:
+            self.log_syntax_error("Variable declaration using 'I HAS A' must be inside WAZZUP...BUHBYE block")
+            # Still consume the tokens to avoid cascading errors
+            self.advance_to_next_token()
+            if self.current_token and self.current_token.type == 'Variable Identifier':
+                self.advance_to_next_token()
+            return
+        
         self.advance_to_next_token()
 
         if not self.current_token or self.current_token.type != 'Variable Identifier':
@@ -461,6 +519,12 @@ class SyntaxAnalyzer:
             return
 
         variable_name = self.current_token.value
+        
+        # Validate variable name format (must start with letter, then letters/numbers/underscores)
+        if not self._is_valid_variable_name(variable_name):
+            self.log_syntax_error(f"Invalid variable name '{variable_name}'. Variable names must start with a letter, followed by letters, numbers, or underscores only")
+            return
+        
         self.advance_to_next_token()
 
         if self.current_token and self.current_token.value == "ITZ":
@@ -509,8 +573,13 @@ class SyntaxAnalyzer:
         # Parse and evaluate expression to get actual value
         value = self.parse_expression()
         
-        # Determine type based on value using semantics
-        data_type = self.semantics.infer_type(value)
+        # Check if this was an explicit typecast (MAEK) - use that type instead of inferring
+        if self._last_typecast_type:
+            data_type = self._last_typecast_type
+            self._last_typecast_type = None  # Reset after use
+        else:
+            # Determine type based on value using semantics
+            data_type = self.semantics.infer_type(value)
         
         # Use semantics to assign variable
         try:
@@ -519,28 +588,34 @@ class SyntaxAnalyzer:
             self.log_syntax_error(str(e))
 
     def parse_typecasting(self):
+        # Handles IS NOW A (modifies variable) and MAEK in statement context
         if self.current_token.value == 'MAEK':
+            # This path handles MAEK when called from statement context
+            # Note: standalone MAEK is handled in parse_line which stores to IT
             self.advance_to_next_token()
 
-            if not self.current_token or self.current_token.value != 'A':
-                self.log_syntax_error("Expected 'A' after 'MAEK'")
-                return
-
-            self.advance_to_next_token()
+            # 'A' is optional after MAEK
+            if self.current_token and self.current_token.value == 'A':
+                self.advance_to_next_token()
 
             if not self.current_token:
-                self.log_syntax_error("Expected value to cast after 'MAEK A'")
+                self.log_syntax_error("Expected value to cast after 'MAEK'")
                 return
 
             cast_value = self.current_token.value
             self.advance_to_next_token()
+            
+            # Check for optional 'A' between value and type
+            if self.current_token and self.current_token.value == 'A':
+                self.advance_to_next_token()
 
             if not self.current_token or self.current_token.type != 'Type Literal':
-                self.log_syntax_error("Expected type literal after value in 'MAEK A' operation")
+                self.log_syntax_error("Expected type literal in MAEK operation")
                 return
 
             self.advance_to_next_token()
         else:
+            # IS NOW A - modifies the variable's type in place
             variable_name = self.current_token.value
             self.advance_to_next_token()
 
@@ -556,7 +631,7 @@ class SyntaxAnalyzer:
 
             target_type = self.current_token.value
             self.advance_to_next_token()
-            # Use semantics to typecast variable (IS NOW A)
+            # Use semantics to typecast variable (IS NOW A) - modifies variable in place
             try:
                 self.semantics.typecast_variable(variable_name, target_type)
             except ValueError as e:
@@ -750,19 +825,19 @@ class SyntaxAnalyzer:
         loop_variable = self.current_token.value
         self.advance_to_next_token()
 
-        if not self.current_token or self.current_token.value not in ['TIL', 'WILE']:
-            self.log_syntax_error("Expected loop condition (TIL/WILE) after loop variable")
-            return
+        # TIL/WILE condition is OPTIONAL - check if present
+        loop_type = None  # None means infinite loop (only GTFO can exit)
+        condition_tokens = []
+        
+        if self.current_token and self.current_token.value in ['TIL', 'WILE']:
+            loop_type = self.current_token.value
+            self.advance_to_next_token()
 
-        loop_type = self.current_token.value
-        self.advance_to_next_token()
-
-        # Instead of consuming the condition into a single value, capture the tokens
-        # that make up the condition expression so we can re-evaluate it each iteration.
-        condition_tokens = self.current_tokens[self.current_position:]
-        if not condition_tokens:
-            self.log_syntax_error("Invalid loop condition expression")
-            return
+            # Capture condition expression tokens
+            condition_tokens = self.current_tokens[self.current_position:]
+            if not condition_tokens:
+                self.log_syntax_error("Invalid loop condition expression")
+                return
 
         # Move to the first line of the loop body
         self.advance_to_next_line()
@@ -771,22 +846,26 @@ class SyntaxAnalyzer:
         loop_body_start_line = self.current_line_number
         loop_body_start_position = 0
 
-        # Main loop execution: evaluate condition each iteration using semantics
+        # Track if we're inside this loop for GTFO handling
+        self.inside_loop = True
+        self.gtfo_in_loop = False
+
+        # Main loop execution
         loop_executed_at_least_once = False
         while True:
-            # Evaluate the condition using a helper that temporarily uses the
-            # captured tokens as the expression to parse/evaluate.
-            condition_value = self.evaluate_expression_tokens(condition_tokens)
+            # Evaluate condition if TIL/WILE was specified
+            if loop_type is not None:
+                condition_value = self.evaluate_expression_tokens(condition_tokens)
+                try:
+                    should_continue = self.semantics.evaluate_loop_condition(loop_type, condition_value)
+                except Exception as e:
+                    self.log_syntax_error(f"Runtime Error evaluating loop condition: {e}")
+                    self.inside_loop = False
+                    return
 
-            # Ask semantics whether loop should continue
-            try:
-                should_continue = self.semantics.evaluate_loop_condition(loop_type, condition_value)
-            except Exception as e:
-                self.log_syntax_error(f"Runtime Error evaluating loop condition: {e}")
-                return
-
-            if not should_continue:
-                break
+                if not should_continue:
+                    break
+            # If no condition (infinite loop), always continue unless GTFO
 
             loop_executed_at_least_once = True
 
@@ -799,12 +878,21 @@ class SyntaxAnalyzer:
             self.current_position = loop_body_start_position
             self.current_token = self.current_tokens[self.current_position] if self.current_tokens else None
 
-            # Execute until we hit the loop terminator
+            # Execute until we hit the loop terminator or GTFO
             while self.current_token and self.current_token.value != 'IM OUTTA YR':
                 self.parse_line()
+                
+                # Check for GTFO (break) inside loop
+                if self.gtfo_in_loop:
+                    break
+                    
                 if getattr(self, 'returning', False):
                     break
                 self.advance_to_next_line()
+
+            # Check if GTFO was issued - break out of loop entirely
+            if self.gtfo_in_loop:
+                break
 
             # After executing body, update loop variable using semantics
             try:
@@ -814,15 +902,18 @@ class SyntaxAnalyzer:
                     self.semantics.decrement_variable(loop_variable)
             except Exception as e:
                 self.log_syntax_error(f"Runtime Error updating loop variable: {e}")
+                self.inside_loop = False
                 return
 
-            # Reset to loop body start for next iteration
             # If the next token is the loop terminator, break out
             if not self.current_line_number:
                 break
 
+        # Reset loop flags
+        self.inside_loop = False
+        self.gtfo_in_loop = False
+
         # After loop terminates, advance until we find the closing IM OUTTA YR
-        # If loop never executed, we need to skip the body to find IM OUTTA YR
         if not loop_executed_at_least_once:
             # Skip lines until we find IM OUTTA YR
             while self.current_line_number is not None:
@@ -830,9 +921,11 @@ class SyntaxAnalyzer:
                     break
                 self.advance_to_next_line()
         else:
-            # Loop executed at least once, current_token might be None or at IM OUTTA YR
-            while self.current_token is None:
+            # Loop executed at least once, find IM OUTTA YR
+            while self.current_token is None or self.current_token.value != 'IM OUTTA YR':
                 if self.current_line_number is None:
+                    break
+                if self.current_token and self.current_token.value == 'IM OUTTA YR':
                     break
                 self.advance_to_next_line()
 
@@ -846,6 +939,7 @@ class SyntaxAnalyzer:
             self.log_syntax_error(f"Expected loop label '{loop_label}' after 'IM OUTTA YR'")
         else:
             self.advance_to_next_token()
+
 
     def parse_switch(self):
         self.inside_switch_block = True
@@ -862,9 +956,8 @@ class SyntaxAnalyzer:
 
         self.advance_to_next_line()
         found_cases = False
-        matched_case = False  # Track if a case has matched
+        matched_case = False  # Track if a case has matched (for fall-through)
         self.gtfo_in_switch = False  # Reset GTFO flag
-        case_executed = False  # Track if a case has been executed (to skip remaining cases)
         case_values = []  # Track case values for duplicate detection
 
         while True:
@@ -876,14 +969,14 @@ class SyntaxAnalyzer:
             if self.current_token.value == 'OIC':
                 break
 
-            # If a case was executed or GTFO was encountered, skip all remaining cases to OIC
-            if case_executed or self.gtfo_in_switch:
-                # Skip OMG and OMGWTF tokens until we find OIC
+            # If GTFO was encountered, skip all remaining cases to OIC
+            if self.gtfo_in_switch:
                 if self.current_token.value == 'OMG':
                     # Skip the OMG case entirely
                     self.advance_to_next_token()  # Skip 'OMG'
                     if self.current_token and self.current_token.type in ['NUMBR Literal', 'NUMBAR Literal', 'YARN Literal', 'TROOF Literal']:
-                        self.advance_to_next_line()  # Skip the literal and move to next line
+                        case_values.append(self.current_token.value)  # Still track for duplicate detection
+                        self.advance_to_next_line()
                     # Skip the case body
                     while True:
                         if not self.current_token:
@@ -909,7 +1002,6 @@ class SyntaxAnalyzer:
                 elif self.current_token.value == 'OIC':
                     break
                 else:
-                    # Skip any other tokens
                     self.advance_to_next_line()
                     continue
 
@@ -922,17 +1014,15 @@ class SyntaxAnalyzer:
                     return
 
                 case_value = self.current_token.value
-                
-                # Track case value for duplicate detection
                 case_values.append(case_value)
                 
                 self.advance_to_next_line()
 
-                # Compare IT with case literal using semantics
-                if not matched_case and self.semantics.match_case(switch_value, case_value):
-                    matched_case = True
-                    case_executed = True
-                    # Execute this case block
+                # Check if this case matches OR if we're in fall-through mode
+                if matched_case or self.semantics.match_case(switch_value, case_value):
+                    matched_case = True  # Enable fall-through for subsequent cases
+                    
+                    # Execute this case block until OMG, OMGWTF, OIC, or GTFO
                     while True:
                         if not self.current_token:
                             if not self.advance_to_next_line():
@@ -949,10 +1039,10 @@ class SyntaxAnalyzer:
                         self.parse_line()
                         self.advance_to_next_line()
                     
-                    # After case executes, continue to skip remaining cases
+                    # Continue to next case (fall-through if no GTFO)
                     continue
                 else:
-                    # Skip this case block - doesn't match
+                    # Skip this case block - doesn't match and not in fall-through
                     while True:
                         if not self.current_token:
                             if not self.advance_to_next_line():
@@ -966,9 +1056,14 @@ class SyntaxAnalyzer:
 
             elif self.current_token.value == 'OMGWTF':
                 found_cases = True
-                # Only execute default if no case matched
-                if not matched_case:
-                    case_executed = True
+                
+                # Execute default if in fall-through OR if no case matched yet
+                if matched_case or not matched_case:
+                    # Always execute OMGWTF if we reach it (either fall-through or no match)
+                    # But only if we're in fall-through mode OR no case has matched
+                    should_execute = matched_case or True  # Fall-through continues here
+                    
+                    # Actually, OMGWTF executes if: (1) no case matched, or (2) we're falling through
                     self.advance_to_next_line()
 
                     while True:
@@ -986,21 +1081,7 @@ class SyntaxAnalyzer:
 
                         self.parse_line()
                         self.advance_to_next_line()
-                    
-                    # After default executes, continue to skip (though we're already at OIC)
                     continue
-                else:
-                    # Skip default case - a case already matched
-                    while True:
-                        if not self.current_token:
-                            if not self.advance_to_next_line():
-                                break
-                            continue
-
-                        if self.current_token.value == 'OIC':
-                            break
-
-                        self.advance_to_next_line()
             else:
                 self.parse_line()
                 self.advance_to_next_line()
@@ -1197,7 +1278,7 @@ class SyntaxAnalyzer:
                 self.in_wazzup_block = False
                 self.advance_to_next_token()
             elif self.current_token.value == 'I HAS A':
-                # allow variable declarations both inside and outside WAZZUP block
+                # Variable declarations must be inside WAZZUP block
                 self.parse_variable_declaration()
             elif self.current_token.type == 'Output Keyword':
                 self.parse_print()
@@ -1234,19 +1315,19 @@ class SyntaxAnalyzer:
                 # GTFO can be a break (in loops/switch) or void return (in functions)
                 self.advance_to_next_token()
                 
-                # If we are in a switch block, GTFO breaks out
-                if self.inside_switch_block:
+                # Priority: loop > switch > function return
+                if self.inside_loop:
+                    # GTFO breaks out of the loop
+                    self.gtfo_in_loop = True
+                    return
+                elif self.inside_switch_block:
+                    # GTFO breaks out of switch
                     self.gtfo_in_switch = True
-                    return  # Break is handled by parse_switch loop
-                
-                # If we are in a function and NOT in a loop/switch, it's a return
-                # For now, simplistic check: if we are executing a function (implied by usage)
-                # But we need to distinguish from loop break.
-                # Since we don't track loop depth robustly yet, we'll assume GTFO is return if not in switch
-                # Ideally we should track loop depth.
-                if not self.inside_switch_block: # And not in loop?
-                     self.semantics.return_void()
-                     self.returning = True
+                    return
+                else:
+                    # GTFO in function context is void return
+                    self.semantics.return_void()
+                    self.returning = True
                 return
             elif self.current_token.value in ['OMG', 'OMGWTF']:
                 if not self.inside_switch_block:
@@ -1263,6 +1344,16 @@ class SyntaxAnalyzer:
                 # Store result in IT using semantics
                 self.semantics.store_result(result, result_type)
                 return
+            elif self.current_token.value == 'MAEK':
+                # Standalone MAEK expression - stores result in IT
+                # MAEK var1 A NUMBAR -> returns result to IT, does NOT modify var1
+                result = self.parse_and_evaluate_typecasting()
+                
+                if result is not None:
+                    # Infer type and store result in IT using semantics
+                    result_type = self.semantics.infer_type(result)
+                    self.semantics.store_result(result, result_type)
+                return
             elif self.current_token.type == 'Variable Identifier':
                 next_token = self.current_tokens[self.current_position + 1] if self.current_position + 1 < len(self.current_tokens) else None
                 if next_token and next_token.type == 'Variable Assignment':
@@ -1270,15 +1361,15 @@ class SyntaxAnalyzer:
                 elif next_token and next_token.type == 'Typecasting Operation':
                     self.parse_typecasting()
                 elif not next_token:
-                    # check if the next line starts with WTF?
+                    # Standalone variable - check if next line starts with WTF? or O RLY?
                     line_numbers = sorted(self.lines.keys())
                     current_index = line_numbers.index(self.current_line_number)
                     next_line_number = line_numbers[current_index + 1] if current_index + 1 < len(line_numbers) else None
                     
                     if next_line_number:
                         next_line_tokens = self.lines[next_line_number]
-                        if next_line_tokens and next_line_tokens[0].value == 'WTF?':
-                            # standalone expression before switch
+                        if next_line_tokens and next_line_tokens[0].value in ['WTF?', 'O RLY?']:
+                            # Standalone expression before switch or conditional
                             # Copy variable value to IT using semantics
                             try:
                                 var_value = self.semantics.get_variable(self.current_token.value)
@@ -1290,7 +1381,7 @@ class SyntaxAnalyzer:
                             self.advance_to_next_token()
                             return
                     
-                    # invalid: standalone identifier not before WTF?
+                    # invalid: standalone identifier not before WTF? or O RLY?
                     self.log_syntax_error("Unknown statement", found=self.current_token.value)
                     return
                 else:

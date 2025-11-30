@@ -12,6 +12,7 @@ class SemanticsEvaluator:
         self.output_buffer = []
         self.emit_function = emit_function  # For GUI output
         self.functions = {}  # Function storage
+        self._saved_global_scope = None  # For function scope isolation
     
     # evaluate arithmetic operations
     def evaluate_arithmetic(self, operation, operand1, operand2):
@@ -19,13 +20,15 @@ class SemanticsEvaluator:
         val1 = TypeCaster.implicit_cast_to_numeric(operand1)
         val2 = TypeCaster.implicit_cast_to_numeric(operand2)
         
-        # NOOB propagation: if any operand is NOOB or cannot be converted, return NOOB
-        if val1 is None or val2 is None:
-            return 'NOOB'
+        # If a value cannot be typecast to numeric, the operation must fail with an error
+        if val1 is None:
+            raise ValueError(f"Cannot implicitly cast '{operand1}' to NUMBR/NUMBAR for arithmetic operation")
+        if val2 is None:
+            raise ValueError(f"Cannot implicitly cast '{operand2}' to NUMBR/NUMBAR for arithmetic operation")
 
-        # Check for division by zero - return NOOB instead of error
+        # Check for division by zero - raise error
         if operation in ['QUOSHUNT OF', 'MOD OF'] and val2 == 0:
-            return 'NOOB'
+            raise ValueError("Division by zero error")
 
         # perform the operation
         try:
@@ -122,19 +125,18 @@ class SemanticsEvaluator:
     
     def evaluate_relational_comparison(self, comparison_op, value, minmax_op, operand1, operand2):
         # evaluate relational comparison using TypeCaster
-        # Get types for error reporting
-        type_val = self._get_operand_type(value)
-        type1 = self._get_operand_type(operand1)
-        type2 = self._get_operand_type(operand2)
-        
         # Convert to numeric values using TypeCaster
         val = TypeCaster.implicit_cast_to_numeric(value)
         val1 = TypeCaster.implicit_cast_to_numeric(operand1)
         val2 = TypeCaster.implicit_cast_to_numeric(operand2)
         
-        # NOOB propagation: if any operand cannot be converted, return NOOB
-        if val is None or val1 is None or val2 is None:
-            return 'NOOB'
+        # If a value cannot be typecast to numeric, the operation must fail with an error
+        if val is None:
+            raise ValueError(f"Cannot implicitly cast '{value}' to NUMBR/NUMBAR for comparison")
+        if val1 is None:
+            raise ValueError(f"Cannot implicitly cast '{operand1}' to NUMBR/NUMBAR for {minmax_op}")
+        if val2 is None:
+            raise ValueError(f"Cannot implicitly cast '{operand2}' to NUMBR/NUMBAR for {minmax_op}")
         
         try:
             # Evaluate the min/max operation
@@ -143,7 +145,7 @@ class SemanticsEvaluator:
             elif minmax_op == 'SMALLR OF':
                 minmax_result = min(val1, val2)
             else:
-                return 'NOOB'  # Unknown operation
+                raise ValueError(f"Unknown min/max operation: {minmax_op}")
             
             # Compare value with min/max result
             if comparison_op == 'BOTH SAEM':
@@ -155,11 +157,13 @@ class SemanticsEvaluator:
                 # DIFFRINT x AN SMALLR OF x AN y => x > y (x differs from min of x and y)
                 result = val != minmax_result
             else:
-                return 'NOOB'  # Unknown operation
+                raise ValueError(f"Unknown comparison operation: {comparison_op}")
             
             return 'WIN' if result else 'FAIL'
-        except Exception:
-            return 'NOOB'
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Error in relational comparison: {e}")
     
     # evaluate unary NOT operation
     def evaluate_unary_not(self, operand):
@@ -183,9 +187,12 @@ class SemanticsEvaluator:
         # Validate operands count
         self.validate_concatenation_operands(operands)
         
+        # Implicitly typecast all operands to YARN using TypeCaster
+        # Per spec: 124 -> "124", 2.8 -> "2.8", WIN -> "WIN", etc.
         result = []
         for operand in operands:
-            result.append(str(operand))
+            yarn_value = TypeCaster.implicit_cast_to_yarn(operand)
+            result.append(yarn_value)
         return ''.join(result)
     
     def resolve_value(self, token_value, token_type):
@@ -402,30 +409,34 @@ class SemanticsEvaluator:
     
     # prepare for function call by binding arguments to parameters
     def prepare_function_call(self, function_name, arguments):
-        if function_name not in self.functions: # check if function is defined
+        if function_name not in self.functions:
             raise ValueError(f"Function '{function_name}' not defined") 
         
-        function_info = self.functions[function_name] # get function info
-        parameters = function_info["parameters"] # get parameters
+        function_info = self.functions[function_name]
+        parameters = function_info["parameters"]
         
-        # validate function arguments
+        # validate argument count matches parameter count
         self.validate_function_arguments(function_name, len(parameters), len(arguments))
         
-        # save previous values of parameters for scope management
-        saved_values = {}
-        for param in parameters:
-            if param in self.symbol_table:
-                saved_values[param] = self.symbol_table[param].copy()
+        # Save the ENTIRE global symbol table for scope isolation
+        # Functions cannot access identifiers outside of them
+        self._saved_global_scope = {k: v.copy() for k, v in self.symbol_table.items()}
         
-        # bind arguments to parameters in symbol table
+        # Clear symbol table and create isolated function scope
+        # Only IT and parameters are accessible in function
+        self.symbol_table.clear()
+        
+        # Initialize IT to NOOB in function scope
+        self.symbol_table["IT"] = {"value": "NOOB", "type": "NOOB"}
+        
+        # Bind arguments to parameters (pass by value)
+        # Parameters become local variables with argument values
         for param, arg in zip(parameters, arguments):
+            # Deep copy for pass-by-value semantics
             self.symbol_table[param] = {
                 "value": arg,
                 "type": self._infer_type(arg)
             }
-        
-        # store saved values in function_info for restoration after call
-        function_info["_saved_scope"] = saved_values
         
         return function_info
     
@@ -456,21 +467,22 @@ class SemanticsEvaluator:
         return self.symbol_table.get('IT', {}).get('value', 'NOOB')
     
     def _restore_function_scope(self, func_info):
-        # restore previous scope after function execution
-        if '_saved_scope' in func_info:
-            saved_scope = func_info['_saved_scope']
-            parameters = func_info['parameters']
-            
-            for param in parameters:
-                if param in saved_scope:
-                    # restore previous value
-                    self.symbol_table[param] = saved_scope[param]
-                elif param in self.symbol_table:
-                    # remove parameter if it didn't exist before
-                    del self.symbol_table[param]
-            
-            # clean up
-            del func_info['_saved_scope']
+        # Restore the global scope after function execution
+        # Get the function's return value before restoring scope
+        return_value = self.symbol_table.get('IT', {}).get('value', 'NOOB')
+        return_type = self.symbol_table.get('IT', {}).get('type', 'NOOB')
+        
+        if self._saved_global_scope is not None:
+            # Restore the entire global symbol table
+            self.symbol_table.clear()
+            self.symbol_table.update(self._saved_global_scope)
+            self._saved_global_scope = None
+        
+        # Update IT with the function's return value in global scope
+        self.symbol_table["IT"] = {
+            "value": return_value,
+            "type": return_type
+        }
     
     # ==================== RESULT STORAGE ====================
     
