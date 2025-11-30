@@ -245,7 +245,9 @@ class SemanticsEvaluator:
         
         # update existing variable - always store as YARN per LOLCODE spec
         self.symbol_table[variable_name]['value'] = processed_value
-        self.symbol_table[variable_name]['type'] = 'YARN'
+        new_type = TypeCaster.infer_type(processed_value)
+        self.symbol_table[variable_name]['type'] = new_type
+
 
     def _process_input_value(self, value):
         # process and clean input value
