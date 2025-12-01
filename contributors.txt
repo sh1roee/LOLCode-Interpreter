@@ -1,5 +1,7 @@
 Contributors: 
+CMSC 124 ST-3L
+Group GTV
 
-Sophia Ysabel Garcia
-James Andrei Tadeja
-Ron Russell Velasco
+Sophia Ysabel H. Garcia
+James Andrei G. Tadeja
+Ron Russell C. Velasco
