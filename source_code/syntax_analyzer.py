@@ -443,15 +443,11 @@ class SyntaxAnalyzer:
         return result
     
     def parse_and_evaluate_typecasting(self):
-        # Parse and evaluate MAEK [A] <var> <type> typecasting using semantics
+        # Parse and evaluate MAEK <var> [A] <type> typecasting using semantics
         # MAEK returns the typecast value to IT, does NOT modify the original variable
-        # Syntax: MAEK var1 A NUMBAR  OR  MAEK var1 NUMBAR (A is optional)
+        # Syntax: MAEK var1 A NUMBAR  OR  MAEK var1 NUMBAR (A is optional between var and type)
         if self.current_token.value == 'MAEK':
             self.advance_to_next_token()
-
-            # 'A' is optional after MAEK
-            if self.current_token and self.current_token.value == 'A':
-                self.advance_to_next_token()
 
             if not self.current_token:
                 self.log_syntax_error("Expected value to cast after 'MAEK'")
@@ -598,10 +594,6 @@ class SyntaxAnalyzer:
             # This path handles MAEK when called from statement context
             # Note: standalone MAEK is handled in parse_line which stores to IT
             self.advance_to_next_token()
-
-            # 'A' is optional after MAEK
-            if self.current_token and self.current_token.value == 'A':
-                self.advance_to_next_token()
 
             if not self.current_token:
                 self.log_syntax_error("Expected value to cast after 'MAEK'")
