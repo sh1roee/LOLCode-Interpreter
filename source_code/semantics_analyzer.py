@@ -298,7 +298,6 @@ class SemanticsEvaluator:
         return TypeCaster.infer_type(value)
     
     def _infer_type(self, value):
-        """Private wrapper for backward compatibility"""
         return self.infer_type(value)
     
     # ==================== OUTPUT EXECUTION ====================

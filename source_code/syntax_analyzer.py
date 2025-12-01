@@ -398,7 +398,6 @@ class SyntaxAnalyzer:
         return result
     
     def parse_and_evaluate_concatenation(self):
-        """Parse and evaluate SMOOSH using semantics"""
         operands = []
         
         # Consume SMOOSH if present
