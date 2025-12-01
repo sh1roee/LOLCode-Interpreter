@@ -199,6 +199,11 @@ class LOLCodeInterpreterGUI:
                 self.text_editor.delete("1.0", "end")
                 self.text_editor.insert("1.0", content)
                 self.update_line_numbers()
+                
+                # Clear symbol table and lexemes when new file is loaded
+                self.symbol_textbox.delete("1.0", "end")
+                self.lexemes_textbox.delete("1.0", "end")
+                
                 self.log_to_console(f"File loaded: {os.path.basename(filename)}\n")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load file: {e}")

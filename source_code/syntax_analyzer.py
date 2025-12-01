@@ -542,6 +542,11 @@ class SyntaxAnalyzer:
             except ValueError as e:
                 self.log_syntax_error(str(e))
         else:
+            # Check for unexpected tokens after variable name (when no ITZ)
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after variable declaration. Expected end of line or comment.")
+                return
+            
             # Use semantics to declare uninitialized variable
             try:
                 self.semantics.declare_variable(variable_name)
@@ -680,7 +685,9 @@ class SyntaxAnalyzer:
             elif self.current_token.type in ['Parameter Delimiter', 'Output Separator']:
                 self.advance_to_next_token()
             else:
-                break
+                # Unexpected token found - this is an error
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' in VISIBLE statement. Expected expression, separator, or end of line.")
+                return
 
         # Use semantics to execute output
         if output:
@@ -695,6 +702,13 @@ class SyntaxAnalyzer:
 
         variable_name = self.current_token.value
         
+        self.advance_to_next_token()
+        
+        # Check for unexpected tokens after variable name
+        if self.current_token:
+            self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after GIMMEH statement. Expected end of line or comment.")
+            return
+        
         # Capture input and store it in the variable
         try:
             input_value = self._get_input(f"Enter value for {variable_name}: ")
@@ -705,8 +719,6 @@ class SyntaxAnalyzer:
             self.log_syntax_error(f"Undefined variable '{variable_name}' - must be declared in WAZZUP block")
         except Exception as e:
             self.log_syntax_error(f"Error capturing input for '{variable_name}': {str(e)}")
-        
-        self.advance_to_next_token()
 
     def parse_conditional(self):
         # Parse and execute conditional logic (O RLY?) per LOLCODE specification
