@@ -651,14 +651,28 @@ class SyntaxAnalyzer:
             return
 
         output = []
+        expect_separator = False  # Track if we need a separator before next expression
+        
         while self.current_token:
             if self.current_token.type == 'INVALID TOKEN':
                 self.log_syntax_error(f"Invalid token in VISIBLE statement", found=self.current_token.value)
                 return
 
+            # If we expect a separator, only allow separators or end of line
+            if expect_separator:
+                if self.current_token.type in ['Parameter Delimiter', 'Output Separator']:
+                    self.advance_to_next_token()
+                    expect_separator = False
+                    continue
+                else:
+                    # Found expression without separator
+                    self.log_syntax_error(f"Missing separator before '{self.current_token.value}' in VISIBLE statement. Use 'AN' or '+' to separate multiple expressions.")
+                    return
+
             if self.current_token.type in ['NUMBR Literal', 'NUMBAR Literal', 'TROOF Literal']:
                 output.append(str(self.current_token.value))
                 self.advance_to_next_token()
+                expect_separator = True
             elif self.current_token.type == 'Variable Identifier':
                 # get variable value using semantics
                 varname = self.current_token.value
@@ -670,20 +684,25 @@ class SyntaxAnalyzer:
                     self.log_syntax_error(f"Undefined variable: {varname}")
                     return
                 self.advance_to_next_token()
+                expect_separator = True
             elif self.current_token.type == 'YARN Literal':
                 output.append(self.current_token.value)
                 self.advance_to_next_token()
+                expect_separator = True
             elif self.current_token.type in ['Arithmetic Operation', 'Boolean Operation', 'Comparison Operation']:
                 # Parse and evaluate operation to get actual result
                 result = self.parse_and_evaluate_operation()
                 output.append(str(result))
+                expect_separator = True
             elif self.current_token.type == 'String Concatenation':
                 # Parse and evaluate concatenation to get actual result
                 result = self.parse_and_evaluate_concatenation()
                 output.append(str(result))
                 break
             elif self.current_token.type in ['Parameter Delimiter', 'Output Separator']:
-                self.advance_to_next_token()
+                # Separator without preceding expression
+                self.log_syntax_error(f"Unexpected separator '{self.current_token.value}' in VISIBLE statement. Expected expression before separator.")
+                return
             else:
                 # Unexpected token found - this is an error
                 self.log_syntax_error(f"Unexpected token '{self.current_token.value}' in VISIBLE statement. Expected expression, separator, or end of line.")
