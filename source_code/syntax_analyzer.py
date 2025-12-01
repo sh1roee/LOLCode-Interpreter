@@ -751,6 +751,13 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Expected 'O RLY?' for conditional block")
             return
 
+        self.advance_to_next_token()
+        
+        # Check for unexpected tokens after O RLY?
+        if self.current_token:
+            self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'O RLY?'. Expected end of line or comment.")
+            return
+
         # Use semantics to determine which branch to execute
         branch_executed = self.semantics.should_execute_branch('YA RLY')
         
@@ -758,6 +765,13 @@ class SyntaxAnalyzer:
 
         if not self.current_token or self.current_token.value != 'YA RLY':
             self.log_syntax_error("Expected 'YA RLY' after 'O RLY?'")
+            return
+
+        self.advance_to_next_token()
+        
+        # Check for unexpected tokens after YA RLY
+        if self.current_token:
+            self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'YA RLY'. Expected end of line or comment.")
             return
 
         self.advance_to_next_line()
@@ -782,6 +796,11 @@ class SyntaxAnalyzer:
                 self.parse_expression()  # Still need to consume the expression
                 mebbe_result = False
             
+            # Check for unexpected tokens after MEBBE expression
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after MEBBE expression. Expected end of line or comment.")
+                return
+            
             self.advance_to_next_line()
             
             # Execute MEBBE block if condition is True and no previous block executed
@@ -793,6 +812,13 @@ class SyntaxAnalyzer:
 
         # Handle NO WAI (else) block - only execute if no branch executed yet
         if self.current_token and self.current_token.value == 'NO WAI':
+            self.advance_to_next_token()
+            
+            # Check for unexpected tokens after NO WAI
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'NO WAI'. Expected end of line or comment.")
+                return
+            
             self.advance_to_next_line()
 
             if not branch_executed:
@@ -802,6 +828,13 @@ class SyntaxAnalyzer:
 
         if not self.current_token or self.current_token.value != 'OIC':
             self.log_syntax_error("Expected 'OIC' to close 'O RLY?' block")
+        else:
+            self.advance_to_next_token()
+            
+            # Check for unexpected tokens after OIC
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'OIC'. Expected end of line or comment.")
+                return
     
     def _execute_conditional_block(self, end_keywords):
         # Execute a conditional block until one of the end keywords is reached
@@ -985,6 +1018,13 @@ class SyntaxAnalyzer:
 
         if self.current_token.value != 'WTF?':
             self.log_syntax_error("Switch must start with 'WTF?'")
+            return
+
+        self.advance_to_next_token()
+        
+        # Check for unexpected tokens after WTF?
+        if self.current_token:
+            self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'WTF?'. Expected end of line or comment.")
             return
 
         # Get the IT variable value for comparison
@@ -1317,9 +1357,20 @@ class SyntaxAnalyzer:
             if self.current_token.value == 'WAZZUP':
                 self.in_wazzup_block = True
                 self.advance_to_next_token()
+                
+                # Check for unexpected tokens after WAZZUP
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'WAZZUP'. Expected end of line or comment.")
+                    return
+                    
             elif self.current_token.value == 'BUHBYE' and self.in_wazzup_block:
                 self.in_wazzup_block = False
                 self.advance_to_next_token()
+                
+                # Check for unexpected tokens after BUHBYE
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'BUHBYE'. Expected end of line or comment.")
+                    return
             elif self.current_token.value == 'I HAS A':
                 # Variable declarations must be inside WAZZUP block
                 self.parse_variable_declaration()
@@ -1381,6 +1432,11 @@ class SyntaxAnalyzer:
                 # Parse and evaluate expression, stores result in IT via semantics
                 result = self.parse_expression()
                 
+                # Check for unexpected tokens after standalone expression
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after expression. Expected end of line or comment.")
+                    return
+                
                 # Infer type using semantics
                 result_type = self.semantics.infer_type(result)
                 
@@ -1391,6 +1447,11 @@ class SyntaxAnalyzer:
                 # Standalone MAEK expression - stores result in IT
                 # MAEK var1 A NUMBAR -> returns result to IT, does NOT modify var1
                 result = self.parse_and_evaluate_typecasting()
+                
+                # Check for unexpected tokens after standalone MAEK expression
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after MAEK expression. Expected end of line or comment.")
+                    return
                 
                 if result is not None:
                     # Infer type and store result in IT using semantics
