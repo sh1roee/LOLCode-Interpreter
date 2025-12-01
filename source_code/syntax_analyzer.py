@@ -528,6 +528,11 @@ class SyntaxAnalyzer:
             # Parse and evaluate expression to get actual value
             value = self.parse_expression()
             
+            # Check for unexpected tokens after the initialization expression
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after variable initialization. Expected end of line or comment.")
+                return
+            
             # Let semantics infer the type from the value
             data_type = self.semantics.infer_type(value)
             
@@ -563,6 +568,11 @@ class SyntaxAnalyzer:
 
         # Parse and evaluate expression to get actual value
         value = self.parse_expression()
+        
+        # Check for unexpected tokens after the assignment expression
+        if self.current_token:
+            self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after assignment expression. Expected end of line or comment.")
+            return
         
         # Check if this was an explicit typecast (MAEK) - use that type instead of inferring
         if self._last_typecast_type:
@@ -1256,6 +1266,10 @@ class SyntaxAnalyzer:
 
     def parse_line(self):
         # print(f"\nParsing line {self.current_line_number}: {[t.value for t in self.current_tokens]}")
+
+        # Skip execution if syntax errors have been found
+        if self.error_messages:
+            return
 
         while self.current_token:
             # check for invalid tokens first
