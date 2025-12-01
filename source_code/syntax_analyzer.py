@@ -637,6 +637,12 @@ class SyntaxAnalyzer:
 
             target_type = self.current_token.value
             self.advance_to_next_token()
+            
+            # Check for unexpected tokens after type literal
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'IS NOW A' statement. Expected end of line or comment.")
+                return
+            
             # Use semantics to typecast variable (IS NOW A) - modifies variable in place
             try:
                 self.semantics.typecast_variable(variable_name, target_type)
@@ -1439,6 +1445,12 @@ class SyntaxAnalyzer:
 
         if self.current_token and self.current_token.value == "HAI":
             self.emit("\nProgram starts with 'HAI'\n")
+            self.advance_to_next_token()
+            
+            # Check for unexpected tokens after HAI
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'HAI'. Expected end of line or comment.")
+            
             self.advance_to_next_line()
 
             while self.current_line_number is not None and self.current_token:
@@ -1454,6 +1466,11 @@ class SyntaxAnalyzer:
 
             if self.current_token and self.current_token.value == "KTHXBYE":
                 self.emit("\nProgram ends with 'KTHXBYE'\n")
+                self.advance_to_next_token()
+                
+                # Check for unexpected tokens after KTHXBYE
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'KTHXBYE'. Expected end of line or comment.")
             else:
                 if not any("Program must end with 'KTHXBYE'" in e for e in self.error_messages):
                     self.log_syntax_error("Program must end with 'KTHXBYE'")
