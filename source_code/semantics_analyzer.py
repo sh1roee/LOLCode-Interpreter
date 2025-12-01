@@ -295,10 +295,6 @@ class SemanticsEvaluator:
         return self.symbol_table[variable_name]["value"]
     
     def infer_type(self, value):
-        """
-        Public method to infer LOLCODE type from Python value.
-        Uses TypeCaster for consistent type inference.
-        """
         return TypeCaster.infer_type(value)
     
     def _infer_type(self, value):
@@ -610,10 +606,6 @@ class SemanticsEvaluator:
     
     # MAEK ... A ...
     def typecast_value(self, value, target_type):
-        """
-        Convert value to target type using TypeCaster for consistency.
-        Used for MAEK operations.
-        """
         try:
             return TypeCaster.explicit_cast(value, target_type)
         except ValueError as e:

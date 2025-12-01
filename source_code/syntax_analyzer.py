@@ -50,12 +50,6 @@ class SyntaxAnalyzer:
             print(message)
 
     def _is_valid_variable_name(self, name):
-        """
-        Validate variable name according to LOLCODE spec:
-        - Must start with a letter
-        - Followed by any combination of letters, numbers, and underscores
-        - No spaces, dashes, or other special symbols
-        """
         import re
         # Pattern: starts with letter, followed by letters/numbers/underscores
         pattern = r'^[a-zA-Z][a-zA-Z0-9_]*$'
@@ -142,9 +136,6 @@ class SyntaxAnalyzer:
             self.current_token = None
 
     def parse_expression(self):
-        """
-        Parse an expression and return its value by delegating evaluation to semantics
-        """
         if not self.current_token:
             return None
 

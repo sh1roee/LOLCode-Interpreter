@@ -131,17 +131,8 @@ def showOutput(tokens_found):
     print("-" * 70)
     print(f"Total tokens: {len(tokens_found)}\n")
 
-# NEW: Core tokenize function that returns Token objects with line numbers
+# tokenize function that returns Token objects with line numbers
 def tokenize(file_content):
-    """
-    Tokenizes LOLCODE content and returns a list of Token objects.
-    
-    Args:
-        file_content: String containing LOLCODE source code
-    
-    Returns:
-        List of Token objects, each with type, value, and line_number
-    """
     if not file_content:
         return []
     
@@ -238,10 +229,6 @@ def tokenize(file_content):
 
 # function to tokenize content (wrapper for backward compatibility)
 def tokenizer(content):
-    """
-    Processes content dictionary and displays tokenized results.
-    Returns dictionary with filename as key and list of Token objects as value.
-    """
     if not content:
         return None
     
