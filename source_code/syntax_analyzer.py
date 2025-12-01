@@ -659,9 +659,10 @@ class SyntaxAnalyzer:
                 try:
                     val = self.semantics.get_variable(varname)
                     output.append(str(val))
-                except ValueError:
-                    # Variable not declared, use name as literal
-                    output.append(str(varname))
+                except ValueError as e:
+                    # Variable not declared - this is an error
+                    self.log_syntax_error(f"Undefined variable: {varname}")
+                    return
                 self.advance_to_next_token()
             elif self.current_token.type == 'YARN Literal':
                 output.append(self.current_token.value)
