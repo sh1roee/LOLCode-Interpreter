@@ -1284,6 +1284,11 @@ class SyntaxAnalyzer:
             self.log_syntax_error("Function must end with 'IF U SAY SO'")
         else:
             self.advance_to_next_token()
+            
+            # Check for unexpected tokens after IF U SAY SO
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'IF U SAY SO'. Expected end of line or comment.")
+                return
 
     def parse_functioncall(self):
         # parse function call syntax and delegate execution to semantics
