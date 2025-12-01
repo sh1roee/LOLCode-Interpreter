@@ -905,11 +905,41 @@ class SyntaxAnalyzer:
             loop_type = self.current_token.value
             self.advance_to_next_token()
 
-            # Capture condition expression tokens
-            condition_tokens = self.current_tokens[self.current_position:]
+            # Capture condition expression tokens for later evaluation
+            condition_start = self.current_position
+            condition_tokens = []
+            
+            # Collect tokens until end of line for later evaluation
+            while self.current_token:
+                condition_tokens.append(self.current_token)
+                self.advance_to_next_token()
+            
             if not condition_tokens:
+                self.log_syntax_error("Missing condition expression after loop condition keyword")
+                return
+            
+            # Basic syntax validation: check if we have valid token types for an expression
+            # We don't evaluate here, just check token structure
+            valid_expression_types = {
+                'Variable Identifier', 'NUMBR Literal', 'NUMBAR Literal', 'YARN Literal', 'TROOF Literal',
+                'Arithmetic Operation', 'Boolean Operation', 'Comparison Operation', 'Parameter Delimiter',
+                'String Concatenation', 'Typecasting Operation'
+            }
+            
+            has_valid_expression = any(token.type in valid_expression_types for token in condition_tokens)
+            
+            if not has_valid_expression:
                 self.log_syntax_error("Invalid loop condition expression")
                 return
+            
+            # Check for invalid tokens that shouldn't be in expressions
+            for token in condition_tokens:
+                if token.type == 'INVALID TOKEN':
+                    self.log_syntax_error(f"Invalid token '{token.value}' in loop condition")
+                    return
+                elif token.type not in valid_expression_types:
+                    self.log_syntax_error(f"Unexpected token '{token.value}' in loop condition. Expected expression components only.")
+                    return
 
         # Move to the first line of the loop body
         self.advance_to_next_line()
@@ -1011,6 +1041,11 @@ class SyntaxAnalyzer:
             self.log_syntax_error(f"Expected loop label '{loop_label}' after 'IM OUTTA YR'")
         else:
             self.advance_to_next_token()
+            
+            # Check for unexpected tokens after loop label
+            if self.current_token:
+                self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'IM OUTTA YR {loop_label}'. Expected end of line or comment.")
+                return
 
 
     def parse_switch(self):
@@ -1216,6 +1251,11 @@ class SyntaxAnalyzer:
             else:
                 break
 
+        # Check for unexpected tokens after function parameters
+        if self.current_token:
+            self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after function parameters. Expected end of line or comment.")
+            return
+
         self.advance_to_next_line() 
         
         # Store function definition with start line using semantics
@@ -1402,12 +1442,23 @@ class SyntaxAnalyzer:
                 
                 # Parse return value
                 ret_val = self.parse_expression()
+                
+                # Check for unexpected tokens after return expression
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'FOUND YR' expression. Expected end of line or comment.")
+                    return
+                
                 self.semantics.return_value(ret_val)
                 self.returning = True
                 return
             elif self.current_token.value == 'GTFO':
                 # GTFO can be a break (in loops/switch) or void return (in functions)
                 self.advance_to_next_token()
+                
+                # Check for unexpected tokens after GTFO
+                if self.current_token:
+                    self.log_syntax_error(f"Unexpected token '{self.current_token.value}' after 'GTFO'. Expected end of line or comment.")
+                    return
                 
                 # Priority: loop > switch > function return
                 if self.inside_loop:
